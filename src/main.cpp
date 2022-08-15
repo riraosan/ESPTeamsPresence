@@ -23,7 +23,7 @@
 #include "ESP32_RMT_Driver.h"
 
 // Global settings
-#define NUMLEDS                           1   // Number of LEDs on the strip (if not set via build flags)
+#define NUMLEDS                           25   // Number of LEDs on the strip (if not set via build flags)
 #define DATAPIN                           27  // GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define DISABLECERTCHECK 1					// Uncomment to disable https certificate checks (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
@@ -493,7 +493,7 @@ void statemachine() {
 
   // Statemachine: Devicelogin started
   if (state == SMODEDEVICELOGINSTARTED) {
-    DBG_PRINTLN(F("SMODEDEVICELOGINSTARTED"));
+    //DBG_PRINTLN(F("SMODEDEVICELOGINSTARTED"));
     if (laststate != SMODEDEVICELOGINSTARTED) {
       setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
       DBG_PRINTLN(F("Device login failed"));
