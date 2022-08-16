@@ -23,7 +23,7 @@
 #include "ESP32_RMT_Driver.h"
 
 // Global settings
-#define NUMLEDS                           25   // Number of LEDs on the strip (if not set via build flags)
+#define NUMLEDS                           25  // Number of LEDs on the strip (if not set via build flags)
 #define DATAPIN                           27  // GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define DISABLECERTCHECK 1					// Uncomment to disable https certificate checks (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
@@ -346,7 +346,14 @@ void pollForToken() {
   DynamicJsonDocument responseDoc(capacity);
 
   // TODO
-  StaticJsonDocument<200> filter;
+  StaticJsonDocumen<500> filter;
+
+  filter["error"]             = true;
+  filter["error_description"] = true;
+  // filter["access_token"]      = true;
+  // filter["refresh_token"]     = true;
+  // filter["id_token"]          = true;
+  // filter["expires_in"]        = true;
 
   boolean res = requestJsonApi(responseDoc, filter, "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token", payload, capacity);
 
@@ -493,7 +500,7 @@ void statemachine() {
 
   // Statemachine: Devicelogin started
   if (state == SMODEDEVICELOGINSTARTED) {
-    //DBG_PRINTLN(F("SMODEDEVICELOGINSTARTED"));
+    // DBG_PRINTLN(F("SMODEDEVICELOGINSTARTED"));
     if (laststate != SMODEDEVICELOGINSTARTED) {
       setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
       DBG_PRINTLN(F("Device login failed"));
@@ -591,8 +598,8 @@ void customShow(void) {
  */
 void setup() {
   // WiFi不具合対策
-  pinMode(0, OUTPUT);
-  digitalWrite(0, LOW);
+  // pinMode(0, OUTPUT);
+  // digitalWrite(0, LOW);
 
   Serial.begin(115200);
   DBG_PRINTLN();

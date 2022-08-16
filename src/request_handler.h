@@ -103,8 +103,8 @@ boolean requestJsonApi(JsonDocument& doc, JsonDocument& filter, String url, Stri
         // filter["list"][0]["main"]["temp"] = true;
 
         // TODO
-        // DeserializationError error = deserializeJson(doc, http.getStream(), DeserializationOption::Filter(filter));
-        DeserializationError error = deserializeJson(doc, https.getStream());
+        DeserializationError error = deserializeJson(doc, https.getStream(), DeserializationOption::Filter(filter));
+        //DeserializationError error = deserializeJson(doc, https.getStream());
         client->stop();
         delete client;
         client = NULL;
