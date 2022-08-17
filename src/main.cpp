@@ -8,112 +8,34 @@
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * modified by @riraosan.github.io
  */
 
 #include <Arduino.h>
-#include <IotWebConf.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
+#include <EEPROM.h>
+#include <FS.h>
+#include <SPIFFS.h>
+
+#include <IotWebConf.h>
 #include <ArduinoJson.h>
 #include <WS2812FX.h>
-#include <EEPROM.h>
-#include "FS.h"
-#include "SPIFFS.h"
-#include "ESP32_RMT_Driver.h"
 
-// Global settings
-#define NUMLEDS                           25  // Number of LEDs on the strip (if not set via build flags)
-#define DATAPIN                           27  // GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
-// #define DISABLECERTCHECK 1					// Uncomment to disable https certificate checks (if not set via build flags)
-// #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
-#define DEFAULT_POLLING_PRESENCE_INTERVAL "30"             // Default interval to poll for presence info (seconds)
-#define DEFAULT_ERROR_RETRY_INTERVAL      30               // Default interval to try again after errors
-#define TOKEN_REFRESH_TIMEOUT             60               // Number of seconds until expiration before token gets refreshed
-#define CONTEXT_FILE                      "/context.json"  // Filename of the context file
-#define VERSION                           "0.18.1"         // Version of the software
+#include "config.h"
+#include "filter.h"
+#include "esp32-hal-log.h"
 
-#define DBG_PRINT(x)                      Serial.print(x)
-#define DBG_PRINTLN(x)                    Serial.println(x)
-
-#ifndef DISABLECERTCHECK
-// Tool to get certs: https://projects.petrucci.ch/esp32/
-
-// certificate for https://login.microsoftonline.com
-// DigiCert Global Root CA, Valid until: 10/Nov/2031
-// From: https://www.digicert.com/kb/digicert-root-certificates.htm
-const char* rootCACertificateLogin =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh\n"
-    "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n"
-    "d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBD\n"
-    "QTAeFw0wNjExMTAwMDAwMDBaFw0zMTExMTAwMDAwMDBaMGExCzAJBgNVBAYTAlVT\n"
-    "MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n"
-    "b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IENBMIIBIjANBgkqhkiG\n"
-    "9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4jvhEXLeqKTTo1eqUKKPC3eQyaKl7hLOllsB\n"
-    "CSDMAZOnTjC3U/dDxGkAV53ijSLdhwZAAIEJzs4bg7/fzTtxRuLWZscFs3YnFo97\n"
-    "nh6Vfe63SKMI2tavegw5BmV/Sl0fvBf4q77uKNd0f3p4mVmFaG5cIzJLv07A6Fpt\n"
-    "43C/dxC//AH2hdmoRBBYMql1GNXRor5H4idq9Joz+EkIYIvUX7Q6hL+hqkpMfT7P\n"
-    "T19sdl6gSzeRntwi5m3OFBqOasv+zbMUZBfHWymeMr/y7vrTC0LUq7dBMtoM1O/4\n"
-    "gdW7jVg/tRvoSSiicNoxBN33shbyTApOB6jtSj1etX+jkMOvJwIDAQABo2MwYTAO\n"
-    "BgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUA95QNVbR\n"
-    "TLtm8KPiGxvDl7I90VUwHwYDVR0jBBgwFoAUA95QNVbRTLtm8KPiGxvDl7I90VUw\n"
-    "DQYJKoZIhvcNAQEFBQADggEBAMucN6pIExIK+t1EnE9SsPTfrgT1eXkIoyQY/Esr\n"
-    "hMAtudXH/vTBH1jLuG2cenTnmCmrEbXjcKChzUyImZOMkXDiqw8cvpOp/2PV5Adg\n"
-    "06O/nVsJ8dWO41P0jmP6P6fbtGbfYmbW0W5BjfIttep3Sp+dWOIrWcBAI+0tKIJF\n"
-    "PnlUkiaY4IBIqDfv8NZ5YBberOgOzW6sRBc4L0na4UU+Krk2U886UAb3LujEV0ls\n"
-    "YSEY1QSteDwsOoBrp+uvFRTp2InBuThs4pFsiv9kuXclVzDAGySj4dzp30d8tbQk\n"
-    "CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=\n"
-    "-----END CERTIFICATE-----\n"
-    "";
-
-// certificate for https://graph.microsoft.com
-// DigiCert Assured ID Root G2, Valid until: 15/Jan/2038
-// From: https://www.digicert.com/kb/digicert-root-certificates.htm
-const char* rootCACertificateGraph =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh\n"
-    "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n"
-    "d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n"
-    "MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n"
-    "MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n"
-    "b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n"
-    "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n"
-    "2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n"
-    "1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n"
-    "q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n"
-    "tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n"
-    "vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n"
-    "BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n"
-    "5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n"
-    "1Yl9PMWLSn/pvtsrF9+wX3N3KjITOYFnQoQj8kVnNeyIv/iPsGEMNKSuIEyExtv4\n"
-    "NeF22d+mQrvHRAiGfzZ0JFrabA0UWTW98kndth/Jsw1HKj2ZL7tcu7XUIOGZX1NG\n"
-    "Fdtom/DzMNU+MeKNhJ7jitralj41E6Vf8PlwUHBHQRFXGU7Aj64GxJUTFy8bJZ91\n"
-    "8rGOmaFvE7FBcf6IKshPECBV1/MUReXgRPTqh5Uykw7+U0b6LJ3/iyK5S9kJRaTe\n"
-    "pLiaWN0bfVKfjllDiIGknibVb63dDcY3fe0Dkhvld1927jyNxF1WW6LZZm6zNTfl\n"
-    "MrY=\n"
-    "-----END CERTIFICATE-----\n"
-    "";
-#endif
-
-// IotWebConf
-// -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
-const char thingName[] = "ESPTeamsPresence";
-// -- Initial password to connect to the Thing, when it creates an own Access Point.
-const char wifiInitialApPassword[] = "presence";
-
-DNSServer dnsServer;
-WebServer server(80);
-
-IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
-
-// Add parameter
 #define STRING_LEN  64
 #define INTEGER_LEN 16
-char                paramClientIdValue[STRING_LEN];
-char                paramTenantValue[STRING_LEN];
-char                paramPollIntervalValue[INTEGER_LEN];
-char                paramNumLedsValue[INTEGER_LEN];
+char paramClientIdValue[STRING_LEN];
+char paramTenantValue[STRING_LEN];
+char paramPollIntervalValue[INTEGER_LEN];
+char paramNumLedsValue[INTEGER_LEN];
+
+// Add parameter
 IotWebConfSeparator separator         = IotWebConfSeparator();
 IotWebConfParameter paramClientId     = IotWebConfParameter("Client-ID (Generic ID: 3837bbf0-30fb-47ad-bce8-f460ba9880c3)", "clientId", paramClientIdValue, STRING_LEN, "text", "e.g. 3837bbf0-30fb-47ad-bce8-f460ba9880c3", "3837bbf0-30fb-47ad-bce8-f460ba9880c3");
 IotWebConfParameter paramTenant       = IotWebConfParameter("Tenant hostname / ID", "tenantId", paramTenantValue, STRING_LEN, "text", "e.g. contoso.onmicrosoft.com");
@@ -121,8 +43,44 @@ IotWebConfParameter paramPollInterval = IotWebConfParameter("Presence polling in
 IotWebConfParameter paramNumLeds      = IotWebConfParameter("Number of LEDs (default: 16)", "numLeds", paramNumLedsValue, INTEGER_LEN, "number", "1..500", "16", "min='1' max='500' step='1'");
 byte                lastIotWebConfState;
 
-// HTTP client
-WiFiClientSecure client;
+// IotWebConf
+// -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
+const char thingName[] = "ESPTeamsPresence";
+// -- Initial password to connect to the Thing, when it creates an own Access Point.
+const char wifiInitialApPassword[] = "presence";
+
+DNSServer  dnsServer;
+WebServer  server(80);
+IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
+
+// HTTPS client
+// WiFiClientSecure client;
+
+String access_token  = "";
+String refresh_token = "";
+String id_token      = "";
+
+#include "ESP32_RMT_Driver.h"
+#include "request_handler.h"
+#include "spiffs_webserver.h"
+
+String availability = "";
+String activity     = "";
+
+uint8_t retries = 0;
+
+// LED Task
+TaskHandle_t TaskNeopixel;
+
+unsigned int expires = 0;
+
+extern String  user_code;
+extern String  device_code;
+extern uint8_t interval;
+
+uint8_t       state     = SMODEINITIAL;
+uint8_t       laststate = SMODEINITIAL;
+unsigned long tsPolling = 0;
 
 // WS2812FX
 WS2812FX ws2812fx = WS2812FX(NUMLEDS, DATAPIN, NEO_GRB + NEO_KHZ800);
@@ -131,45 +89,9 @@ int      numberLeds;
 // OTA update
 HTTPUpdateServer httpUpdater;
 
-// Global variables
-String  user_code   = "";
-String  device_code = "";
-uint8_t interval    = 5;
-
-String       access_token  = "";
-String       refresh_token = "";
-String       id_token      = "";
-unsigned int expires       = 0;
-
-String availability = "";
-String activity     = "";
-
-// Statemachine
-#define SMODEINITIAL              0   // Initial
-#define SMODEWIFICONNECTING       1   // Wait for wifi connection
-#define SMODEWIFICONNECTED        2   // Wifi connected
-#define SMODEDEVICELOGINSTARTED   10  // Device login flow was started
-#define SMODEDEVICELOGINFAILED    11  // Device login flow failed
-#define SMODEAUTHREADY            20  // Authentication successful
-#define SMODEPOLLPRESENCE         21  // Poll for presence
-#define SMODEREFRESHTOKEN         22  // Access token needs refresh
-#define SMODEPRESENCEREQUESTERROR 23  // Access token needs refresh
-uint8_t              state     = SMODEINITIAL;
-uint8_t              laststate = SMODEINITIAL;
-static unsigned long tsPolling = 0;
-
-uint8_t retries = 0;
-
-// Multicore
-TaskHandle_t TaskNeopixel;
-
-/**
- * Helper
- */
-// Calculate token lifetime
-int getTokenLifetime() {
-  return (expires - millis()) / 1000;
-}
+StaticJsonDocument<500> loginFilter;     //初回ログインに使用
+StaticJsonDocument<500> tokenFilter;     //トークン取得に使用
+StaticJsonDocument<500> presenceFilter;  //在籍情報取得時に使用
 
 // Save context information to file in SPIFFS
 void saveContext() {
@@ -182,9 +104,9 @@ void saveContext() {
   File   contextFile  = SPIFFS.open(CONTEXT_FILE, FILE_WRITE);
   size_t bytesWritten = serializeJsonPretty(contextDoc, contextFile);
   contextFile.close();
-  DBG_PRINT(F("saveContext() - Success: "));
-  DBG_PRINTLN(bytesWritten);
-  // DBG_PRINTLN(contextDoc.as<String>());
+  log_d("%s", "saveContext() - Success: ");
+  log_d("%d", bytesWritten);
+  // log_d(contextDoc.as<String>());
 }
 
 boolean loadContext() {
@@ -192,19 +114,18 @@ boolean loadContext() {
   boolean success = false;
 
   if (!file) {
-    DBG_PRINTLN(F("loadContext() - No file found"));
+    log_d("%s", "loadContext() - No file found");
   } else {
     size_t size = file.size();
     if (size == 0) {
-      DBG_PRINTLN(F("loadContext() - File empty"));
+      log_d("%s", "loadContext() - File empty");
     } else {
       const int            capacity = JSON_OBJECT_SIZE(3) + 10000;
       DynamicJsonDocument  contextDoc(capacity);
       DeserializationError err = deserializeJson(contextDoc, file);
 
       if (err) {
-        DBG_PRINT(F("loadContext() - deserializeJson() failed with code: "));
-        DBG_PRINTLN(err.c_str());
+        log_d("%s", "loadContext() - deserializeJson() failed with code: %s", err.c_str());
       } else {
         int numSettings = 0;
         if (!contextDoc["access_token"].isNull()) {
@@ -221,17 +142,17 @@ boolean loadContext() {
         }
         if (numSettings == 3) {
           success = true;
-          DBG_PRINTLN(F("loadContext() - Success"));
+          log_d("%s", "loadContext() - Success");
           if (strlen(paramClientIdValue) > 0 && strlen(paramTenantValue) > 0) {
-            DBG_PRINTLN(F("loadContext() - Next: Refresh token."));
+            log_d("%s", "loadContext() - Next: Refresh token.");
             state = SMODEREFRESHTOKEN;
           } else {
-            DBG_PRINTLN(F("loadContext() - No client id or tenant setting found."));
+            log_d("%s", "loadContext() - No client id or tenant setting found.");
           }
         } else {
           Serial.printf("loadContext() - ERROR Number of valid settings in file: %d, should be 3.\n", numSettings);
         }
-        // DBG_PRINTLN(contextDoc.as<String>());
+        // log_d(contextDoc.as<String>());
       }
     }
     file.close();
@@ -240,30 +161,19 @@ boolean loadContext() {
   return success;
 }
 
-// Remove context information file in SPIFFS
-void removeContext() {
-  SPIFFS.remove(CONTEXT_FILE);
-  DBG_PRINTLN(F("removeContext() - Success"));
-}
-
 void startMDNS() {
-  DBG_PRINTLN("startMDNS()");
+  log_d("%s", "startMDNS()");
   // Set up mDNS responder
   if (!MDNS.begin(thingName)) {
-    DBG_PRINTLN("Error setting up MDNS responder!");
+    log_d("%s", "Error setting up MDNS responder!");
     while (1) {
       delay(1000);
     }
   }
   // MDNS.addService("http", "tcp", 80);
 
-  DBG_PRINT("mDNS responder started: ");
-  DBG_PRINT(thingName);
-  DBG_PRINTLN(".local");
+  log_d("%s", "mDNS responder started: %s.local", thingName);
 }
-
-#include "request_handler.h"
-#include "spiffs_webserver.h"
 
 // Neopixel control
 void setAnimation(uint8_t segment, uint8_t mode = 0, uint32_t color = 0, uint16_t speed = 3000, bool reverse = false) {
@@ -283,47 +193,47 @@ void setPresenceAnimation() {
 
   if (activity.equals("Available")) {
     setAnimation(0, FX_MODE_STATIC, GREEN);
-    DBG_PRINTLN("Available");
+    log_d("%s", "Available");
   }
   if (activity.equals("Away")) {
     setAnimation(0, FX_MODE_STATIC, YELLOW);
-    DBG_PRINTLN("Away");
+    log_d("%s", "Away");
   }
   if (activity.equals("BeRightBack")) {
     setAnimation(0, FX_MODE_STATIC, ORANGE);
-    DBG_PRINTLN("BeRightBack");
+    log_d("%s", "BeRightBack");
   }
   if (activity.equals("Busy")) {
     setAnimation(0, FX_MODE_STATIC, PURPLE);
-    DBG_PRINTLN("Busy");
+    log_d("%s", "Busy");
   }
   if (activity.equals("DoNotDisturb") || activity.equals("UrgentInterruptionsOnly")) {
     setAnimation(0, FX_MODE_STATIC, PINK);
-    DBG_PRINTLN("DoNotDisturb");
+    log_d("%s", "DoNotDisturb");
   }
   if (activity.equals("InACall")) {
     setAnimation(0, FX_MODE_BREATH, RED);
-    DBG_PRINTLN("InACall");
+    log_d("%s", "InACall");
   }
   if (activity.equals("InAConferenceCall")) {
     setAnimation(0, FX_MODE_BREATH, RED, 9000);
-    DBG_PRINTLN("InAConferenceCall");
+    log_d("%s", "InAConferenceCall");
   }
   if (activity.equals("Inactive")) {
     setAnimation(0, FX_MODE_BREATH, WHITE);
-    DBG_PRINTLN("Available");
+    log_d("%s", "Available");
   }
   if (activity.equals("InAMeeting")) {
     setAnimation(0, FX_MODE_SCAN, RED);
-    DBG_PRINTLN("Inactive");
+    log_d("%s", "Inactive");
   }
   if (activity.equals("Offline") || activity.equals("OffWork") || activity.equals("OutOfOffice") || activity.equals("PresenceUnknown")) {
     setAnimation(0, FX_MODE_STATIC, BLACK);
-    DBG_PRINTLN("Offline");
+    log_d("%s", "Offline");
   }
   if (activity.equals("Presenting")) {
     setAnimation(0, FX_MODE_COLOR_WIPE, RED);
-    DBG_PRINTLN("Presenting");
+    log_d("%s", "Presenting");
   }
 }
 
@@ -345,17 +255,10 @@ void pollForToken() {
   const size_t        capacity = JSON_OBJECT_SIZE(7) + 10000;  // Case 2: Successful (bigger size of both variants, so take that one as capacity)
   DynamicJsonDocument responseDoc(capacity);
 
-  // TODO
-  StaticJsonDocumen<500> filter;
-
-  filter["error"]             = true;
-  filter["error_description"] = true;
-  // filter["access_token"]      = true;
-  // filter["refresh_token"]     = true;
-  // filter["id_token"]          = true;
-  // filter["expires_in"]        = true;
-
-  boolean res = requestJsonApi(responseDoc, filter, "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token", payload, capacity);
+  bool res = requestJsonApi(responseDoc,
+                            DeserializationOption::Filter(tokenFilter),
+                            "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token",
+                            payload);
 
   if (!res) {
     state = SMODEDEVICELOGINFAILED;
@@ -381,7 +284,7 @@ void pollForToken() {
       // Set state
       state = SMODEAUTHREADY;
 
-      DBG_PRINTLN("set:SMODEAUTHREADY");
+      log_d("%s", "set:SMODEAUTHREADY");
     } else {
       Serial.printf("pollForToken() - Unknown response: %s\n", responseDoc.as<const char*>());
     }
@@ -396,9 +299,12 @@ void pollPresence() {
 
   // TODO
 
-  StaticJsonDocument<200> filter;
-
-  boolean res = requestJsonApi(responseDoc, filter, "https://graph.microsoft.com/v1.0/me/presence", "", capacity, "GET", true);
+  bool res = requestJsonApi(responseDoc,
+                            DeserializationOption::Filter(presenceFilter),
+                            "https://graph.microsoft.com/v1.0/me/presence",
+                            "",
+                            "GET",
+                            true);
 
   if (!res) {
     state = SMODEPRESENCEREQUESTERROR;
@@ -406,7 +312,7 @@ void pollPresence() {
   } else if (responseDoc.containsKey("error")) {
     const char* _error_code = responseDoc["error"]["code"];
     if (strcmp(_error_code, "InvalidAuthenticationToken")) {
-      DBG_PRINTLN(F("pollPresence() - Refresh needed"));
+      log_d("%s", "pollPresence() - Refresh needed");
       tsPolling = millis();
       state     = SMODEREFRESHTOKEN;
     } else {
@@ -429,7 +335,7 @@ boolean refreshToken() {
   boolean success = false;
   // See: https://docs.microsoft.com/de-de/azure/active-directory/develop/v1-protocols-oauth-code#refreshing-the-access-tokens
   String payload = "client_id=" + String(paramClientIdValue) + "&grant_type=refresh_token&refresh_token=" + refresh_token;
-  DBG_PRINTLN(F("refreshToken()"));
+  log_d("%s", "refreshToken()");
 
   const size_t        capacity = JSON_OBJECT_SIZE(7) + 10000;
   DynamicJsonDocument responseDoc(capacity);
@@ -438,7 +344,10 @@ boolean refreshToken() {
 
   StaticJsonDocument<200> filter;
 
-  boolean res = requestJsonApi(responseDoc, filter, "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token", payload, capacity);
+  bool res = requestJsonApi(responseDoc,
+                            DeserializationOption::Filter(tokenFilter),
+                            "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token",
+                            payload);
 
   // Replace tokens and expiration
   if (res && responseDoc.containsKey("access_token") && responseDoc.containsKey("refresh_token")) {
@@ -458,10 +367,10 @@ boolean refreshToken() {
       expires         = millis() + (_expires_in * 1000);  // Calculate timestamp when token expires
     }
 
-    DBG_PRINTLN(F("refreshToken() - Success"));
+    log_d("%s", "refreshToken() - Success");
     state = SMODEPOLLPRESENCE;
   } else {
-    DBG_PRINTLN(F("refreshToken() - Error:"));
+    log_d("%s", "refreshToken() - Error:");
     // Set retry after timeout
     tsPolling = millis() + (DEFAULT_ERROR_RETRY_INTERVAL * 1000);
   }
@@ -474,11 +383,11 @@ void statemachine() {
   byte iotWebConfState = iotWebConf.getState();
   if (iotWebConfState != lastIotWebConfState) {
     if (iotWebConfState == IOTWEBCONF_STATE_NOT_CONFIGURED || iotWebConfState == IOTWEBCONF_STATE_AP_MODE) {
-      DBG_PRINTLN(F("Detected AP mode"));
+      log_d("%s", "Detected AP mode");
       setAnimation(0, FX_MODE_THEATER_CHASE, WHITE);
     }
     if (iotWebConfState == IOTWEBCONF_STATE_CONNECTING) {
-      DBG_PRINTLN(F("WiFi connecting"));
+      log_d("%s", "WiFi connecting");
       state = SMODEWIFICONNECTING;
     }
   }
@@ -495,26 +404,26 @@ void statemachine() {
     startMDNS();
     loadContext();
     // WiFi client
-    DBG_PRINTLN(F("Wifi connected, waiting for requests ..."));
+    log_d("%s", "Wifi connected, waiting for requests ...");
   }
 
   // Statemachine: Devicelogin started
   if (state == SMODEDEVICELOGINSTARTED) {
-    // DBG_PRINTLN(F("SMODEDEVICELOGINSTARTED"));
+    // log_d("%s", "SMODEDEVICELOGINSTARTED");
     if (laststate != SMODEDEVICELOGINSTARTED) {
       setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
-      DBG_PRINTLN(F("Device login failed"));
+      log_d("%s", "Device login failed");
     }
     if (millis() >= tsPolling) {
       pollForToken();
       tsPolling = millis() + (interval * 1000);
-      DBG_PRINTLN(F("pollForToken"));
+      log_d("%s", "pollForToken");
     }
   }
 
   // Statemachine: Devicelogin failed
   if (state == SMODEDEVICELOGINFAILED) {
-    DBG_PRINTLN(F("Device login failed"));
+    log_d("%s", "Device login failed");
     state = SMODEWIFICONNECTED;  // Return back to initial mode
   }
 
@@ -528,7 +437,7 @@ void statemachine() {
   // Statemachine: Poll for presence information, even if there was a error before (handled below)
   if (state == SMODEPOLLPRESENCE) {
     if (millis() >= tsPolling) {
-      DBG_PRINTLN(F("Polling presence info ..."));
+      log_d("%s", "Polling presence info ...");
       pollPresence();
       tsPolling = millis() + (atoi(paramPollIntervalValue) * 1000);
       Serial.printf("--> Availability: %s, Activity: %s\n\n", availability.c_str(), activity.c_str());
@@ -571,7 +480,7 @@ void statemachine() {
   // Update laststate
   if (laststate != state) {
     laststate = state;
-    DBG_PRINTLN(F("======================================================================"));
+    log_d("%s", "======================================================================");
   }
 }
 
@@ -601,12 +510,15 @@ void setup() {
   // pinMode(0, OUTPUT);
   // digitalWrite(0, LOW);
 
+  deserializeJson(tokenFilter, _tokenFilter);
+  deserializeJson(loginFilter, _loginFilter);
+
   Serial.begin(115200);
-  DBG_PRINTLN();
-  DBG_PRINTLN(F("setup() Starting up..."));
+  log_d();
+  log_d("%s", "setup() Starting up...");
 // Serial.setDebugOutput(true);
 #ifdef DISABLECERTCHECK
-  DBG_PRINTLN(F("WARNING: Checking of HTTPS certificates disabled."));
+  log_d("%s", "WARNING: Checking of HTTPS certificates disabled.");
 #endif
 
   // WS2812FX
@@ -637,7 +549,7 @@ void setup() {
   // WS2812FX
   numberLeds = atoi(paramNumLedsValue);
   if (numberLeds < 1) {
-    DBG_PRINTLN(F("Number of LEDs not given, using 16."));
+    log_d("%s", "Number of LEDs not given, using 16.");
     numberLeds = NUMLEDS;
   }
   ws2812fx.setLength(numberLeds);
@@ -665,12 +577,12 @@ void setup() {
     }
   });
 
-  DBG_PRINTLN(F("setup() ready..."));
+  log_d("%s", "setup() ready...");
 
   // SPIFFS.begin() - Format if mount failed
-  DBG_PRINTLN(F("SPIFFS.begin() "));
+  log_d("%s", "SPIFFS.begin() ");
   if (!SPIFFS.begin(true)) {
-    DBG_PRINTLN("SPIFFS Mount Failed");
+    log_d("%s", "SPIFFS Mount Failed");
     return;
   }
 

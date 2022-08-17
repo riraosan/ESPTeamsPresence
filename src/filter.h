@@ -12,21 +12,28 @@
  * modified by @riraosan.github.io
  */
 
+#pragma once
+
 #include <Arduino.h>
 
-/**
- * SPIFFS webserver
- */
-bool exists(String path);
+constexpr char _loginFilter[] PROGMEM = R"(
+{
+  "user_code" : true,
+  "device_code" : true,
+  "verification_uri" : true,
+  "expires_in" : true,
+  "interval": true,
+  "message" : true
+}
+)";
 
-void handleMinimalUpload(void);
-
-void handleFileUpload(void);
-
-void handleFileDelete(void);
-
-void handleFileList(void);
-
-String getContentType(String filename);
-
-bool handleFileRead(String path);
+constexpr char _tokenFilter[] PROGMEM = R"(
+{
+  "user_code" : true,
+  "device_code" : true,
+  "verification_uri" : true,
+  "expires_in" : true,
+  "interval": true,
+  "message" : true
+}
+)";
