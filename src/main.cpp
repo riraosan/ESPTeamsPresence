@@ -89,9 +89,10 @@ int      numberLeds;
 // OTA update
 HTTPUpdateServer httpUpdater;
 
-StaticJsonDocument<500> loginFilter;     //初回ログインに使用
-StaticJsonDocument<500> tokenFilter;     //トークン取得に使用
-StaticJsonDocument<500> presenceFilter;  //在籍情報取得時に使用
+StaticJsonDocument<200> loginFilter;         //初回ログインに使用
+StaticJsonDocument<200> tokenFilter;         //トークン取得に使用
+StaticJsonDocument<200> refleshtokenFilter;  //トークン再取得に使用
+StaticJsonDocument<200> presenceFilter;      //在籍情報取得時に使用
 
 // Save context information to file in SPIFFS
 void saveContext() {
@@ -188,9 +189,10 @@ void setAnimation(uint8_t segment, uint8_t mode = 0, uint32_t color = 0, uint16_
   ws2812fx.setSegment(segment, startLed, endLed, mode, color, speed, reverse);
 }
 
-void setPresenceAnimation() {
-  // Activity: Available, Away, BeRightBack, Busy, DoNotDisturb, InACall, InAConferenceCall, Inactive, InAMeeting, Offline, OffWork, OutOfOffice, PresenceUnknown, Presenting, UrgentInterruptionsOnly
+// Activity:
+// Available, Away, BeRightBack, Busy, DoNotDisturb, InACall, InAConferenceCall, Inactive, InAMeeting, Offline, OffWork, OutOfOffice, PresenceUnknown, Presenting, UrgentInterruptionsOnly
 
+void setPresenceAnimation() {
   if (activity.equals("Available")) {
     setAnimation(0, FX_MODE_STATIC, GREEN);
     log_d("%s", "Available");
@@ -249,11 +251,8 @@ void onWifiConnected() {
 // Poll for access token
 void pollForToken() {
   String payload = "client_id=" + String(paramClientIdValue) + "&grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=" + device_code;
-  Serial.printf("pollForToken()\n");
 
-  // const size_t capacity = JSON_ARRAY_SIZE(1) + JSON_OBJECT_SIZE(7) + 530; // Case 1: HTTP 400 error (not yet ready)
-  const size_t        capacity = JSON_OBJECT_SIZE(7) + 10000;  // Case 2: Successful (bigger size of both variants, so take that one as capacity)
-  DynamicJsonDocument responseDoc(capacity);
+  DynamicJsonDocument responseDoc(JSON_OBJECT_SIZE(7) + 5000);
 
   bool res = requestJsonApi(responseDoc,
                             DeserializationOption::Filter(tokenFilter),
@@ -267,9 +266,9 @@ void pollForToken() {
     const char* _error_description = responseDoc["error_description"];
 
     if (strcmp(_error, "authorization_pending") == 0) {
-      Serial.printf("pollForToken() - Wating for authorization by user: %s\n\n", _error_description);
+      // log_i("pollForToken() - Wating for authorization by user: %s", _error_description);
     } else {
-      Serial.printf("pollForToken() - Unexpected error: %s, %s\n\n", _error, _error_description);
+      // log_e("pollForToken() - Unexpected error: %s, %s", _error, _error_description);
       state = SMODEDEVICELOGINFAILED;
     }
   } else {
@@ -284,21 +283,21 @@ void pollForToken() {
       // Set state
       state = SMODEAUTHREADY;
 
-      log_d("%s", "set:SMODEAUTHREADY");
+      // log_i("set:SMODEAUTHREADY");
     } else {
-      Serial.printf("pollForToken() - Unknown response: %s\n", responseDoc.as<const char*>());
+      // log_e("pollForToken() - Unknown response: %s", responseDoc.as<const char*>());
     }
   }
 }
 
 // Get presence information
 void pollPresence() {
+  log_d("pollPresence()");
   // See: https://github.com/microsoftgraph/microsoft-graph-docs/blob/ananya/api-reference/beta/resources/presence.md
-  const size_t        capacity = JSON_OBJECT_SIZE(4) + 500;
+  const size_t        capacity = JSON_OBJECT_SIZE(4) + 5000;
   DynamicJsonDocument responseDoc(capacity);
 
   // TODO
-
   bool res = requestJsonApi(responseDoc,
                             DeserializationOption::Filter(presenceFilter),
                             "https://graph.microsoft.com/v1.0/me/presence",
@@ -331,21 +330,16 @@ void pollPresence() {
 }
 
 // Refresh the access token
-boolean refreshToken() {
-  boolean success = false;
+bool refreshToken() {
+  bool success = false;
   // See: https://docs.microsoft.com/de-de/azure/active-directory/develop/v1-protocols-oauth-code#refreshing-the-access-tokens
   String payload = "client_id=" + String(paramClientIdValue) + "&grant_type=refresh_token&refresh_token=" + refresh_token;
   log_d("%s", "refreshToken()");
 
-  const size_t        capacity = JSON_OBJECT_SIZE(7) + 10000;
-  DynamicJsonDocument responseDoc(capacity);
-
-  // TODO
-
-  StaticJsonDocument<200> filter;
+  DynamicJsonDocument responseDoc(6144);  // from ArduinoJson Assistant
 
   bool res = requestJsonApi(responseDoc,
-                            DeserializationOption::Filter(tokenFilter),
+                            DeserializationOption::Filter(refleshtokenFilter),
                             "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token",
                             payload);
 
@@ -510,8 +504,10 @@ void setup() {
   // pinMode(0, OUTPUT);
   // digitalWrite(0, LOW);
 
-  deserializeJson(tokenFilter, _tokenFilter);
   deserializeJson(loginFilter, _loginFilter);
+  deserializeJson(tokenFilter, _tokenFilter);
+  deserializeJson(refleshtokenFilter, _refleshtokenFilter);
+  deserializeJson(presenceFilter, _presenceFilter);
 
   Serial.begin(115200);
   log_d();

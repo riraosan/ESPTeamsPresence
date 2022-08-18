@@ -12,6 +12,7 @@
  * modified by @riraosan.github.io
  */
 
+#include <memory>
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -61,9 +62,10 @@ extern int      numberLeds;
 // OTA update
 extern HTTPUpdateServer httpUpdater;
 
-extern StaticJsonDocument<500> loginFilter;     //初回ログインに使用
-extern StaticJsonDocument<500> tokenFilter;     //トークン取得に使用
-extern StaticJsonDocument<500> presenceFilter;  //在籍情報取得時に使用
+extern StaticJsonDocument<200> loginFilter;         //初回ログインに使用
+extern StaticJsonDocument<200> tokenFilter;         //トークン取得に使用
+extern StaticJsonDocument<200> refleshtokenFilter;  //トークン再取得に使用
+extern StaticJsonDocument<200> presenceFilter;      //在籍情報取得時に使用
 
 int getTokenLifetime() {
   return (expires - millis()) / 1000;
@@ -78,8 +80,7 @@ void removeContext() {
  * API request handler
  */
 bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload, String type, boolean sendAuth) {
-  // WiFiClient
-  WiFiClientSecure* client = new WiFiClientSecure;
+  std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
 
 #ifndef DISABLECERTCHECK
   if (url.indexOf("graph.microsoft.com") > -1) {
@@ -92,10 +93,6 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
   // HTTPClient
   HTTPClient https;
 
-  // Prepare empty response
-  // const int           emptyCapacity = JSON_OBJECT_SIZE(1);
-  // DynamicJsonDocument emptyDoc(emptyCapacity);
-
   // log_d("%s", "[HTTPS] begin...\n");
   if (https.begin(*client, url)) {  // HTTPS
     https.setConnectTimeout(10000);
@@ -106,7 +103,7 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
     if (sendAuth) {
       String header = "Bearer " + access_token;
       https.addHeader("Authorization", header);
-      Serial.printf("[HTTPS] Auth token valid for %d s.\n", getTokenLifetime());
+      log_i("[HTTPS] Auth token valid for %d s.\n", getTokenLifetime());
     }
 
     // Start connection and send HTTP header
@@ -120,59 +117,38 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
     // httpCode will be negative on error
     if (httpCode > 0) {
       // HTTP header has been send and Server response header has been handled
-      Serial.printf("[HTTPS] Method: %s, Response code: %d\n", type.c_str(), httpCode);
-
-      // Just for debugging purposes:
-      // if (url.indexOf("presence") > 0) {
-      // 	Serial.println(client->readString());
-      // }
+      log_i("[HTTPS] Method: %s, Response code: %d\n", type.c_str(), httpCode);
 
       // File found at server (HTTP 200, 301), or HTTP 400 with response payload
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY || httpCode == HTTP_CODE_BAD_REQUEST) {
         // Parse JSON data
-        // original code
-        // DeserializationError error = deserializeJson(doc, *client);
-
-        // TODO
-        String               response(https.getString());
-        DeserializationError error = deserializeJson(doc,
-                                                     response.c_str(),
-                                                     response.length(),
-                                                     filter);
-        // DeserializationError error = deserializeJson(doc, response.c_str(), response.length());
-
-        client->stop();
-        delete client;
-        client = NULL;
-
-        // TODO
-        serializeJsonPretty(doc, Serial);  // for debug
-        Serial.println();
+        DeserializationError error = deserializeJson(doc, https.getString(), filter);
 
         if (error) {
-          log_d("%s", "deserializeJson() failed: ");
-          log_d("%s", "%s", error.c_str());
+          log_e("deserializeJson() failed: %s", error.c_str());
           https.end();
           return false;
         } else {
+          log_i("deserializeJson() Success: %s", error.c_str());
           https.end();
           return true;
         }
       } else {
-        Serial.printf("[HTTPS] Other HTTP code: %d\nResponse: ", httpCode);
-        log_d("%s", "%s", https.getString());
+        log_e("[HTTPS] Other HTTP code: %d\nResponse: %s", httpCode, https.getString());
         https.end();
         return false;
       }
     } else {
-      Serial.printf("[HTTPS] Request failed: %s\n", https.errorToString(httpCode).c_str());
+      log_e("[HTTPS] Request failed: %s\n", https.errorToString(httpCode).c_str());
       https.end();
       return false;
     }
   } else {
-    log_d("%s", "[HTTPS] Unable to connect");
+    // log_e("[HTTPS] Unable to connect");
     return false;
   }
+
+  return false;
 }
 
 /**
@@ -363,10 +339,10 @@ void handleStartDevicelogin() {
     log_d("%s", "handleStartDevicelogin()");
 
     // Request devicelogin context
-    const size_t        capacity = JSON_OBJECT_SIZE(6) + 540;
-    DynamicJsonDocument doc(capacity);
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(6) + 540);
 
-    bool res = requestJsonApi(doc, DeserializationOption::Filter(loginFilter),
+    bool res = requestJsonApi(doc,
+                              DeserializationOption::Filter(loginFilter),
                               "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/devicecode",
                               "client_id=" + String(paramClientIdValue) + "&scope=offline_access%20openid%20Presence.Read");
 
@@ -377,8 +353,7 @@ void handleStartDevicelogin() {
       interval    = doc["interval"].as<unsigned int>();
 
       // Prepare response JSON
-      const size_t        responseCapacity = JSON_OBJECT_SIZE(3);
-      DynamicJsonDocument responseDoc(responseCapacity);
+      DynamicJsonDocument responseDoc(JSON_OBJECT_SIZE(3));
       responseDoc["user_code"]        = doc["user_code"].as<const char*>();
       responseDoc["verification_uri"] = doc["verification_uri"].as<const char*>();
       responseDoc["message"]          = doc["message"].as<const char*>();

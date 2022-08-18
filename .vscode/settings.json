@@ -84,7 +84,8 @@
         "utility": "cpp",
         "typeinfo": "cpp",
         "esp32_rmt_driver.h": "c",
-        "rmt.h": "c"
+        "rmt.h": "c",
+        "string_view": "cpp"
     },
     "markdown-pdf.styles": [
         ""
