@@ -72,7 +72,7 @@ void handleFileUpload() {
     if (!filename.startsWith("/")) {
       filename = "/" + filename;
     }
-    log_d("%s", "handleFileUpload Name: %s", filename);
+    log_d("handleFileUpload Name: %s", filename);
     fsUploadFile = SPIFFS.open(filename, "w");
     filename     = String();
   } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -84,7 +84,7 @@ void handleFileUpload() {
     if (fsUploadFile) {
       fsUploadFile.close();
     }
-    log_d("%s", "handleFileUpload Size: %s", upload.totalSize);
+    log_d("handleFileUpload Size: %d", upload.totalSize);
   }
 }
 
@@ -93,7 +93,7 @@ void handleFileDelete() {
     return server.send(500, "text/plain", "BAD ARGS");
   }
   String path = server.arg(0);
-  log_d("%s", "handleFileDelete: " + path);
+  log_d("handleFileDelete: %s", path);
   if (path == "/") {
     return server.send(500, "text/plain", "BAD PATH");
   }
@@ -112,7 +112,7 @@ void handleFileList() {
   }
 
   String path = server.arg("dir");
-  log_d("%s", "handleFileList: " + path);
+  log_d("handleFileList: %s", path);
 
   File root     = SPIFFS.open(path);
   path          = String();
@@ -167,7 +167,7 @@ String getContentType(String filename) {
 }
 
 bool handleFileRead(String path) {
-  log_d("%s", "handleFileRead: " + path);
+  log_d("handleFileRead: %s", path);
   if (path.endsWith("/")) {
     path += "index.htm";
   }

@@ -21,27 +21,27 @@ constexpr char _loginFilter[] PROGMEM = R"(
   "user_code" : true,
   "device_code" : true,
   "verification_uri" : true,
-  "expires_in" : false,
+  "expires_in" : true,
   "interval": true,
   "message" : true
 }
 )";
 
-constexpr char _tokenFilter[] PROGMEM = R"(
-{
-  "expires_in": true
-  "access_token": true,
-  "refresh_token": true,
-  "id_token": true,
-}
-)";
+// constexpr char _tokenFilter[] PROGMEM = R"(
+// {
+//   "expires_in": true
+//   "access_token": true,
+//   "refresh_token": true,
+//   "id_token": true,
+// }
+// )";
 
 constexpr char _refleshtokenFilter[] PROGMEM = R"(
 {
-  "token_type" : false,
-  "scope" : false,
+  "token_type" : true,
+  "scope" : true,
   "expires_in" : true,
-  "ext_expires_in" : false,
+  "ext_expires_in" : true,
   "access_token" : true,
   "refresh_token" : true,
   "id_token" : true
@@ -50,7 +50,7 @@ constexpr char _refleshtokenFilter[] PROGMEM = R"(
 
 constexpr char _presenceFilter[] PROGMEM = R"(
 {
-  "id": false,
+  "id": true,
   "availability": true,
   "activity": true"
 }

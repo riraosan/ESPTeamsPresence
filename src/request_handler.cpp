@@ -23,7 +23,6 @@
 #include <IotWebConf.h>
 #include <ArduinoJson.h>
 #include <WS2812FX.h>
-//#include "filter.h"
 #include "secrets.h"
 
 #include "request_handler.h"
@@ -73,13 +72,13 @@ int getTokenLifetime() {
 
 void removeContext() {
   SPIFFS.remove(CONTEXT_FILE);
-  log_d("%s", "removeContext() - Success");
+  log_d("removeContext() - Success");
 }
 
 /**
  * API request handler
  */
-bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload, String type, boolean sendAuth) {
+bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload, String type, bool sendAuth) {
   std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
 
 #ifndef DISABLECERTCHECK
@@ -90,10 +89,8 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
   }
 #endif
 
-  // HTTPClient
   HTTPClient https;
 
-  // log_d("%s", "[HTTPS] begin...\n");
   if (https.begin(*client, url)) {  // HTTPS
     https.setConnectTimeout(10000);
     https.setTimeout(10000);
@@ -103,7 +100,7 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
     if (sendAuth) {
       String header = "Bearer " + access_token;
       https.addHeader("Authorization", header);
-      log_i("[HTTPS] Auth token valid for %d s.\n", getTokenLifetime());
+      log_i("[HTTPS] Auth token valid for %d s.", getTokenLifetime());
     }
 
     // Start connection and send HTTP header
@@ -117,12 +114,15 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
     // httpCode will be negative on error
     if (httpCode > 0) {
       // HTTP header has been send and Server response header has been handled
-      log_i("[HTTPS] Method: %s, Response code: %d\n", type.c_str(), httpCode);
+      log_i("[HTTPS] Method: %s, Response code: %d", type.c_str(), httpCode);
 
       // File found at server (HTTP 200, 301), or HTTP 400 with response payload
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY || httpCode == HTTP_CODE_BAD_REQUEST) {
         // Parse JSON data
-        DeserializationError error = deserializeJson(doc, https.getString(), filter);
+        DeserializationError error = deserializeJson(doc, https.getStream(), filter);
+
+        serializeJsonPretty(doc, Serial);
+        Serial.println();
 
         if (error) {
           log_e("deserializeJson() failed: %s", error.c_str());
@@ -134,17 +134,17 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
           return true;
         }
       } else {
-        log_e("[HTTPS] Other HTTP code: %d\nResponse: %s", httpCode, https.getString());
+        log_e("[HTTPS] Other HTTP code: %d", httpCode);
         https.end();
         return false;
       }
     } else {
-      log_e("[HTTPS] Request failed: %s\n", https.errorToString(httpCode).c_str());
+      log_e("[HTTPS] Request failed: %s", https.errorToString(httpCode).c_str());
       https.end();
       return false;
     }
   } else {
-    // log_e("[HTTPS] Unable to connect");
+    log_e("[HTTPS] can't begin().");
     return false;
   }
 
@@ -157,7 +157,7 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
 
 // Requests to /
 void handleRoot() {
-  log_d("%s", "handleRoot()");
+  log_d("handleRoot()");
   // -- Let IotWebConf test and handle captive portal requests.
   if (iotWebConf.handleCaptivePortal()) {
     return;
@@ -258,7 +258,7 @@ void handleRoot() {
 }
 
 void handleGetSettings() {
-  log_d("%s", "handleGetSettings()");
+  log_d("handleGetSettings()");
 
   const int                    capacity = JSON_OBJECT_SIZE(13);
   StaticJsonDocument<capacity> responseDoc;
@@ -283,7 +283,7 @@ void handleGetSettings() {
 
 // Delete EEPROM by removing the trailing sequence, remove context file
 void handleClearSettings() {
-  log_d("%s", "handleClearSettings()");
+  log_d("handleClearSettings()");
 
   for (int t = 0; t < 4; t++) {
     EEPROM.write(t, 0);
@@ -296,7 +296,7 @@ void handleClearSettings() {
 }
 
 bool formValidator() {
-  log_d("%s", "Validating form.");
+  log_d("Validating form.");
   boolean valid = true;
 
   int l1 = server.arg(paramClientId.getId()).length();
@@ -328,7 +328,7 @@ bool formValidator() {
 
 // Config was saved
 void onConfigSaved() {
-  log_d("%s", "Configuration was updated.");
+  log_d("Configuration was updated.");
   ws2812fx.setLength(atoi(paramNumLedsValue));
 }
 
@@ -336,7 +336,7 @@ void onConfigSaved() {
 void handleStartDevicelogin() {
   // Only if not already started
   if (state != SMODEDEVICELOGINSTARTED) {
-    log_d("%s", "handleStartDevicelogin()");
+    log_d("handleStartDevicelogin()");
 
     // Request devicelogin context
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(6) + 540);

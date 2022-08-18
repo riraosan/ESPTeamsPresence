@@ -105,9 +105,8 @@ void saveContext() {
   File   contextFile  = SPIFFS.open(CONTEXT_FILE, FILE_WRITE);
   size_t bytesWritten = serializeJsonPretty(contextDoc, contextFile);
   contextFile.close();
-  log_d("%s", "saveContext() - Success: ");
-  log_d("%d", bytesWritten);
-  // log_d(contextDoc.as<String>());
+  log_d("saveContext() - Success: %d", bytesWritten);
+  log_d("%s", contextDoc.as<String>().c_str());
 }
 
 boolean loadContext() {
@@ -115,18 +114,18 @@ boolean loadContext() {
   boolean success = false;
 
   if (!file) {
-    log_d("%s", "loadContext() - No file found");
+    log_d("loadContext() - No file found");
   } else {
     size_t size = file.size();
     if (size == 0) {
-      log_d("%s", "loadContext() - File empty");
+      log_d("loadContext() - File empty");
     } else {
       const int            capacity = JSON_OBJECT_SIZE(3) + 10000;
       DynamicJsonDocument  contextDoc(capacity);
       DeserializationError err = deserializeJson(contextDoc, file);
 
       if (err) {
-        log_d("%s", "loadContext() - deserializeJson() failed with code: %s", err.c_str());
+        log_d("loadContext() - deserializeJson() failed with code: %s", err.c_str());
       } else {
         int numSettings = 0;
         if (!contextDoc["access_token"].isNull()) {
@@ -143,15 +142,15 @@ boolean loadContext() {
         }
         if (numSettings == 3) {
           success = true;
-          log_d("%s", "loadContext() - Success");
+          log_d("loadContext() - Success");
           if (strlen(paramClientIdValue) > 0 && strlen(paramTenantValue) > 0) {
-            log_d("%s", "loadContext() - Next: Refresh token.");
+            log_d("loadContext() - Next: Refresh token.");
             state = SMODEREFRESHTOKEN;
           } else {
-            log_d("%s", "loadContext() - No client id or tenant setting found.");
+            log_d("loadContext() - No client id or tenant setting found.");
           }
         } else {
-          Serial.printf("loadContext() - ERROR Number of valid settings in file: %d, should be 3.\n", numSettings);
+          log_e("loadContext() - ERROR Number of valid settings in file: %d, should be 3.", numSettings);
         }
         // log_d(contextDoc.as<String>());
       }
@@ -163,17 +162,17 @@ boolean loadContext() {
 }
 
 void startMDNS() {
-  log_d("%s", "startMDNS()");
+  log_d("startMDNS()");
   // Set up mDNS responder
   if (!MDNS.begin(thingName)) {
-    log_d("%s", "Error setting up MDNS responder!");
+    log_d("Error setting up MDNS responder!");
     while (1) {
       delay(1000);
     }
   }
   // MDNS.addService("http", "tcp", 80);
 
-  log_d("%s", "mDNS responder started: %s.local", thingName);
+  log_d("mDNS responder started: %s.local", thingName);
 }
 
 // Neopixel control
@@ -185,57 +184,61 @@ void setAnimation(uint8_t segment, uint8_t mode = 0, uint32_t color = 0, uint16_
     startLed = 0;
     endLed   = numberLeds;
   }
-  Serial.printf("setAnimation: %d, %d-%d, Mode: %d, Color: %d, Speed: %d\n", segment, startLed, endLed, mode, color, speed);
+
+  log_i("setAnimation: %d, %d-%d, Mode: %d, Color: %d, Speed: %d", segment, startLed, endLed, mode, color, speed);
+
   ws2812fx.setSegment(segment, startLed, endLed, mode, color, speed, reverse);
 }
 
-// Activity:
-// Available, Away, BeRightBack, Busy, DoNotDisturb, InACall, InAConferenceCall, Inactive, InAMeeting, Offline, OffWork, OutOfOffice, PresenceUnknown, Presenting, UrgentInterruptionsOnly
-
+// - Activity
+// Available,
+// Away,
+// BeRightBack,
+// Busy,
+// DoNotDisturb,
+// InACall,
+// InAConferenceCall,
+// Inactive,
+// InAMeeting,
+// Offline,
+// OffWork,
+// OutOfOffice,
+// PresenceUnknown,
+// Presenting,
+// UrgentInterruptionsOnly
 void setPresenceAnimation() {
   if (activity.equals("Available")) {
     setAnimation(0, FX_MODE_STATIC, GREEN);
-    log_d("%s", "Available");
   }
   if (activity.equals("Away")) {
     setAnimation(0, FX_MODE_STATIC, YELLOW);
-    log_d("%s", "Away");
   }
   if (activity.equals("BeRightBack")) {
     setAnimation(0, FX_MODE_STATIC, ORANGE);
-    log_d("%s", "BeRightBack");
   }
   if (activity.equals("Busy")) {
     setAnimation(0, FX_MODE_STATIC, PURPLE);
-    log_d("%s", "Busy");
   }
   if (activity.equals("DoNotDisturb") || activity.equals("UrgentInterruptionsOnly")) {
     setAnimation(0, FX_MODE_STATIC, PINK);
-    log_d("%s", "DoNotDisturb");
   }
   if (activity.equals("InACall")) {
     setAnimation(0, FX_MODE_BREATH, RED);
-    log_d("%s", "InACall");
   }
   if (activity.equals("InAConferenceCall")) {
     setAnimation(0, FX_MODE_BREATH, RED, 9000);
-    log_d("%s", "InAConferenceCall");
   }
   if (activity.equals("Inactive")) {
     setAnimation(0, FX_MODE_BREATH, WHITE);
-    log_d("%s", "Available");
   }
   if (activity.equals("InAMeeting")) {
     setAnimation(0, FX_MODE_SCAN, RED);
-    log_d("%s", "Inactive");
   }
   if (activity.equals("Offline") || activity.equals("OffWork") || activity.equals("OutOfOffice") || activity.equals("PresenceUnknown")) {
     setAnimation(0, FX_MODE_STATIC, BLACK);
-    log_d("%s", "Offline");
   }
   if (activity.equals("Presenting")) {
     setAnimation(0, FX_MODE_COLOR_WIPE, RED);
-    log_d("%s", "Presenting");
   }
 }
 
@@ -255,7 +258,7 @@ void pollForToken() {
   DynamicJsonDocument responseDoc(JSON_OBJECT_SIZE(7) + 5000);
 
   bool res = requestJsonApi(responseDoc,
-                            DeserializationOption::Filter(tokenFilter),
+                            DeserializationOption::Filter(refleshtokenFilter),
                             "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token",
                             payload);
 
@@ -266,66 +269,27 @@ void pollForToken() {
     const char* _error_description = responseDoc["error_description"];
 
     if (strcmp(_error, "authorization_pending") == 0) {
-      // log_i("pollForToken() - Wating for authorization by user: %s", _error_description);
+      log_i("pollForToken() - Wating for authorization by user: %s", _error_description);
     } else {
-      // log_e("pollForToken() - Unexpected error: %s, %s", _error, _error_description);
+      log_e("pollForToken() - Unexpected error: %s, %s", _error, _error_description);
       state = SMODEDEVICELOGINFAILED;
     }
   } else {
     if (responseDoc.containsKey("access_token") && responseDoc.containsKey("refresh_token") && responseDoc.containsKey("id_token")) {
       // Save tokens and expiration
+      unsigned int _expires_in = responseDoc["expires_in"].as<unsigned int>();
       access_token             = responseDoc["access_token"].as<String>();
       refresh_token            = responseDoc["refresh_token"].as<String>();
       id_token                 = responseDoc["id_token"].as<String>();
-      unsigned int _expires_in = responseDoc["expires_in"].as<unsigned int>();
       expires                  = millis() + (_expires_in * 1000);  // Calculate timestamp when token expires
 
       // Set state
       state = SMODEAUTHREADY;
 
-      // log_i("set:SMODEAUTHREADY");
+      log_i("Set : SMODEAUTHREADY");
     } else {
-      // log_e("pollForToken() - Unknown response: %s", responseDoc.as<const char*>());
+      log_e("pollForToken() - Unknown response: ");
     }
-  }
-}
-
-// Get presence information
-void pollPresence() {
-  log_d("pollPresence()");
-  // See: https://github.com/microsoftgraph/microsoft-graph-docs/blob/ananya/api-reference/beta/resources/presence.md
-  const size_t        capacity = JSON_OBJECT_SIZE(4) + 5000;
-  DynamicJsonDocument responseDoc(capacity);
-
-  // TODO
-  bool res = requestJsonApi(responseDoc,
-                            DeserializationOption::Filter(presenceFilter),
-                            "https://graph.microsoft.com/v1.0/me/presence",
-                            "",
-                            "GET",
-                            true);
-
-  if (!res) {
-    state = SMODEPRESENCEREQUESTERROR;
-    retries++;
-  } else if (responseDoc.containsKey("error")) {
-    const char* _error_code = responseDoc["error"]["code"];
-    if (strcmp(_error_code, "InvalidAuthenticationToken")) {
-      log_d("%s", "pollPresence() - Refresh needed");
-      tsPolling = millis();
-      state     = SMODEREFRESHTOKEN;
-    } else {
-      Serial.printf("pollPresence() - Error: %s\n", _error_code);
-      state = SMODEPRESENCEREQUESTERROR;
-      retries++;
-    }
-  } else {
-    // Store presence info
-    availability = responseDoc["availability"].as<String>();
-    activity     = responseDoc["activity"].as<String>();
-    retries      = 0;
-
-    setPresenceAnimation();
   }
 }
 
@@ -334,7 +298,7 @@ bool refreshToken() {
   bool success = false;
   // See: https://docs.microsoft.com/de-de/azure/active-directory/develop/v1-protocols-oauth-code#refreshing-the-access-tokens
   String payload = "client_id=" + String(paramClientIdValue) + "&grant_type=refresh_token&refresh_token=" + refresh_token;
-  log_d("%s", "refreshToken()");
+  log_d("refreshToken()");
 
   DynamicJsonDocument responseDoc(6144);  // from ArduinoJson Assistant
 
@@ -361,14 +325,56 @@ bool refreshToken() {
       expires         = millis() + (_expires_in * 1000);  // Calculate timestamp when token expires
     }
 
-    log_d("%s", "refreshToken() - Success");
+    log_d("refreshToken() - Success");
     state = SMODEPOLLPRESENCE;
   } else {
-    log_d("%s", "refreshToken() - Error:");
+    log_d("refreshToken() - Error:");
     // Set retry after timeout
     tsPolling = millis() + (DEFAULT_ERROR_RETRY_INTERVAL * 1000);
   }
   return success;
+}
+
+// Get presence information
+void pollPresence() {
+  log_d("pollPresence()");
+  // See: https://github.com/microsoftgraph/microsoft-graph-docs/blob/ananya/api-reference/beta/resources/presence.md
+  const size_t        capacity = JSON_OBJECT_SIZE(4) + 500;
+  DynamicJsonDocument responseDoc(capacity);
+
+  // TODO
+  bool res = requestJsonApi(responseDoc,
+                            DeserializationOption::Filter(presenceFilter),
+                            "https://graph.microsoft.com/v1.0/me/presence",
+                            "",
+                            "GET",
+                            true);
+
+  if (!res) {
+    state = SMODEPRESENCEREQUESTERROR;
+    retries++;
+    log_e("Presence request error. retry:#%d", retries);
+  } else if (responseDoc.containsKey("error")) {
+    const char* _error_code = responseDoc["error"]["code"];
+    if (strcmp(_error_code, "InvalidAuthenticationToken")) {
+      log_e("pollPresence() - Refresh needed");
+      tsPolling = millis();
+      state     = SMODEREFRESHTOKEN;
+    } else {
+      log_e("pollPresence() - Error: %s\n", _error_code);
+      state = SMODEPRESENCEREQUESTERROR;
+      retries++;
+    }
+  } else {
+    log_i("success to get Presence");
+
+    // Store presence info
+    availability = responseDoc["availability"].as<String>();
+    activity     = responseDoc["activity"].as<String>();
+    retries      = 0;
+
+    setPresenceAnimation();
+  }
 }
 
 // Implementation of a statemachine to handle the different application states
@@ -377,11 +383,11 @@ void statemachine() {
   byte iotWebConfState = iotWebConf.getState();
   if (iotWebConfState != lastIotWebConfState) {
     if (iotWebConfState == IOTWEBCONF_STATE_NOT_CONFIGURED || iotWebConfState == IOTWEBCONF_STATE_AP_MODE) {
-      log_d("%s", "Detected AP mode");
+      log_d("Detected AP mode");
       setAnimation(0, FX_MODE_THEATER_CHASE, WHITE);
     }
     if (iotWebConfState == IOTWEBCONF_STATE_CONNECTING) {
-      log_d("%s", "WiFi connecting");
+      log_d("WiFi connecting");
       state = SMODEWIFICONNECTING;
     }
   }
@@ -398,26 +404,26 @@ void statemachine() {
     startMDNS();
     loadContext();
     // WiFi client
-    log_d("%s", "Wifi connected, waiting for requests ...");
+    log_d("Wifi connected, waiting for requests ...");
   }
 
   // Statemachine: Devicelogin started
   if (state == SMODEDEVICELOGINSTARTED) {
-    // log_d("%s", "SMODEDEVICELOGINSTARTED");
+    // log_d("SMODEDEVICELOGINSTARTED");
     if (laststate != SMODEDEVICELOGINSTARTED) {
       setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
-      log_d("%s", "Device login failed");
+      log_d("Device login failed");
     }
     if (millis() >= tsPolling) {
       pollForToken();
       tsPolling = millis() + (interval * 1000);
-      log_d("%s", "pollForToken");
+      log_d("pollForToken");
     }
   }
 
   // Statemachine: Devicelogin failed
   if (state == SMODEDEVICELOGINFAILED) {
-    log_d("%s", "Device login failed");
+    log_d("Device login failed");
     state = SMODEWIFICONNECTED;  // Return back to initial mode
   }
 
@@ -431,14 +437,14 @@ void statemachine() {
   // Statemachine: Poll for presence information, even if there was a error before (handled below)
   if (state == SMODEPOLLPRESENCE) {
     if (millis() >= tsPolling) {
-      log_d("%s", "Polling presence info ...");
+      log_i("%s", "Polling presence info ...");
       pollPresence();
       tsPolling = millis() + (atoi(paramPollIntervalValue) * 1000);
-      Serial.printf("--> Availability: %s, Activity: %s\n\n", availability.c_str(), activity.c_str());
+      log_i("--> Availability: %s, Activity: %s", availability.c_str(), activity.c_str());
     }
 
     if (getTokenLifetime() < TOKEN_REFRESH_TIMEOUT) {
-      Serial.printf("Token needs refresh, valid for %d s.\n", getTokenLifetime());
+      log_w("Token needs refresh, valid for %d s.", getTokenLifetime());
       state = SMODEREFRESHTOKEN;
     }
   }
@@ -462,7 +468,7 @@ void statemachine() {
       retries = 0;
     }
 
-    Serial.printf("Polling presence failed, retry #%d.\n", retries);
+    log_e("Polling presence failed, retry #%d.", retries);
     if (retries >= 5) {
       // Try token refresh
       state = SMODEREFRESHTOKEN;
@@ -474,7 +480,7 @@ void statemachine() {
   // Update laststate
   if (laststate != state) {
     laststate = state;
-    log_d("%s", "======================================================================");
+    log_d("======================================================================");
   }
 }
 
@@ -505,16 +511,15 @@ void setup() {
   // digitalWrite(0, LOW);
 
   deserializeJson(loginFilter, _loginFilter);
-  deserializeJson(tokenFilter, _tokenFilter);
+  // deserializeJson(tokenFilter, _tokenFilter);
   deserializeJson(refleshtokenFilter, _refleshtokenFilter);
   deserializeJson(presenceFilter, _presenceFilter);
 
   Serial.begin(115200);
-  log_d();
-  log_d("%s", "setup() Starting up...");
+  log_d("setup() Starting up...");
 // Serial.setDebugOutput(true);
 #ifdef DISABLECERTCHECK
-  log_d("%s", "WARNING: Checking of HTTPS certificates disabled.");
+  log_d("WARNING: Checking of HTTPS certificates disabled.");
 #endif
 
   // WS2812FX
@@ -545,7 +550,7 @@ void setup() {
   // WS2812FX
   numberLeds = atoi(paramNumLedsValue);
   if (numberLeds < 1) {
-    log_d("%s", "Number of LEDs not given, using 16.");
+    log_d("Number of LEDs not given, using 16.");
     numberLeds = NUMLEDS;
   }
   ws2812fx.setLength(numberLeds);
@@ -562,8 +567,7 @@ void setup() {
   server.on("/fs/delete", HTTP_DELETE, handleFileDelete);
   server.on("/fs/list", HTTP_GET, handleFileList);
   server.on(
-      "/fs/upload", HTTP_POST, []() { server.send(200, "text/plain", ""); },
-      handleFileUpload);
+      "/fs/upload", HTTP_POST, []() { server.send(200, "text/plain", ""); }, handleFileUpload);
 
   // server.onNotFound([](){ iotWebConf.handleNotFound(); });
   server.onNotFound([]() {
@@ -573,12 +577,12 @@ void setup() {
     }
   });
 
-  log_d("%s", "setup() ready...");
+  log_d("setup() ready...");
 
   // SPIFFS.begin() - Format if mount failed
-  log_d("%s", "SPIFFS.begin() ");
+  log_d("SPIFFS.begin()");
   if (!SPIFFS.begin(true)) {
-    log_d("%s", "SPIFFS Mount Failed");
+    log_d("SPIFFS Mount Failed");
     return;
   }
 

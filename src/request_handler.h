@@ -27,9 +27,6 @@
 #include <IotWebConf.h>
 #include <ArduinoJson.h>
 
-
-
-
 /**
  * Calculate token lifetime
  */
@@ -43,7 +40,7 @@ void removeContext(void);
 /**
  * API request handler
  */
-bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload = "", String type = "POST", boolean sendAuth = false);
+bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload = "", String type = "POST", bool sendAuth = false);
 
 /**
  * Handle web requests
