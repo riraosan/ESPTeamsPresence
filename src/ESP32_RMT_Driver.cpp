@@ -12,19 +12,26 @@
  * modified by @riraosan.github.io
  */
 
+#include "driver/rmt.h"
 #include <Arduino.h>
 #include "ESP32_RMT_Driver.h"
 #include "esp32-hal-log.h"
 
-/*
- * Convert uint8_t type of data to rmt format data.
- */
-void IRAM_ATTR u8_to_rmt(const void* src, rmt_item32_t* dest, size_t src_size, size_t wanted_num, size_t* translated_size, size_t* item_num) {
+#define APB_CLK_MHZ 80                                  // default RMT CLK source (80MHz)
+#define RMT_CLK_DIV 2                                   // RMT CLK divider
+#define RMT_TICK    (RMT_CLK_DIV * 1000 / APB_CLK_MHZ)  // 25ns
+#define T1_TICKS    (250 / RMT_TICK)                    // 250ns
+#define T2_TICKS    (625 / RMT_TICK)                    // 625ns
+#define T3_TICKS    (375 / RMT_TICK)                    // 375ns
+#define RESET_TICKS (50000 / RMT_TICK)                  // 50us
+
+extern "C" void IRAM_ATTR u8_to_rmt(const void* src, rmt_item32_t* dest, size_t src_size, size_t wanted_num, size_t* translated_size, size_t* item_num) {
   if (src == NULL || dest == NULL) {
     *translated_size = 0;
     *item_num        = 0;
     return;
   }
+
   const rmt_item32_t bit0  = {{{T1_TICKS, 1, T2_TICKS + T3_TICKS, 0}}};     // Logical 0
   const rmt_item32_t bit1  = {{{T1_TICKS + T2_TICKS, 1, T3_TICKS, 0}}};     // Logical 1
   const rmt_item32_t reset = {{{RESET_TICKS / 2, 0, RESET_TICKS / 2, 0}}};  // Reset
@@ -32,6 +39,7 @@ void IRAM_ATTR u8_to_rmt(const void* src, rmt_item32_t* dest, size_t src_size, s
   size_t             num   = 0;
   uint8_t*           psrc  = (uint8_t*)src;
   rmt_item32_t*      pdest = dest;
+
   while (size < src_size && num < wanted_num) {
     if (size < src_size - 1) {  // have more pixel data, so translate into RMT items
       (pdest++)->val = (*psrc & B10000000) ? bit1.val : bit0.val;
@@ -50,14 +58,14 @@ void IRAM_ATTR u8_to_rmt(const void* src, rmt_item32_t* dest, size_t src_size, s
     size++;
     psrc++;
   }
+
   *translated_size = size;
   *item_num        = num;
 }
 
-/*
- * Initialize the RMT Tx channel
- */
-void rmt_tx_int(rmt_channel_t channel, uint8_t gpio) {
+void LEDBlink::rmt_tx_int(rmt_channel_t channel, uint8_t gpio) {
+  log_i("%d, %d, %d, %d, %d, %d, %d", APB_CLK_MHZ, RMT_CLK_DIV, RMT_TICK, T1_TICKS, T2_TICKS, T3_TICKS, RESET_TICKS);
+
   rmt_config_t config;
   config.rmt_mode                 = RMT_MODE_TX;
   config.channel                  = channel;
