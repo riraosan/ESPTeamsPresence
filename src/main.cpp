@@ -13,6 +13,7 @@
  */
 
 #include <Arduino.h>
+#include <M5Station.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
@@ -45,9 +46,9 @@ byte                lastIotWebConfState;
 
 // IotWebConf
 // -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
-const char thingName[] = "ESPTeamsPresence";
+const char thingName[] = "ESP32MSGraph";
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
-const char wifiInitialApPassword[] = "presence";
+const char wifiInitialApPassword[] = "12345678";
 
 DNSServer  dnsServer;
 WebServer  server(80);
@@ -60,7 +61,7 @@ String access_token  = "";
 String refresh_token = "";
 String id_token      = "";
 
-#include "ESP32_RMT_Driver.h"
+#include <ESP32_RMT_Driver.h>
 #include "request_handler.h"
 #include "spiffs_webserver.h"
 
@@ -85,6 +86,8 @@ unsigned long tsPolling = 0;
 // WS2812FX
 WS2812FX ws2812fx = WS2812FX(NUMLEDS, DATAPIN, NEO_GRB + NEO_KHZ800);
 int      numberLeds;
+
+ESP32_RMT_Driver blinker;
 
 // OTA update
 HTTPUpdateServer httpUpdater;
@@ -507,8 +510,18 @@ void customShow(void) {
  */
 void setup() {
   // WiFi不具合対策
-  // pinMode(0, OUTPUT);
-  // digitalWrite(0, LOW);
+  pinMode(0, OUTPUT);
+  digitalWrite(0, LOW);
+
+  M5.begin(true, false, true);
+  M5.Lcd.setCursor(0, 10);
+  M5.Lcd.setTextSize(3);
+  M5.Lcd.fillScreen(TFT_WHITE);
+  delay(1000);
+  M5.Lcd.fillScreen(TFT_BLACK);
+  M5.Lcd.setTextColor(TFT_WHITE);
+
+  M5.Lcd.print("Hello World. G0 is LOW.");
 
   deserializeJson(loginFilter, _loginFilter);
   // deserializeJson(tokenFilter, _tokenFilter);
@@ -524,7 +537,10 @@ void setup() {
 
   // WS2812FX
   ws2812fx.init();
-  rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
+  // rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
+
+  blinker.rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
+
   ws2812fx.start();
   setAnimation(0, FX_MODE_STATIC, WHITE);
 

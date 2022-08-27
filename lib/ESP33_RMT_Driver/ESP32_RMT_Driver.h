@@ -17,10 +17,10 @@
 #include "driver/rmt.h"
 #include <Arduino.h>
 
-class LEDBlink {
+class ESP32_RMT_Driver {
 public:
-  LEDBlink() {}
-  ~LEDBlink() {}
+  ESP32_RMT_Driver() {}
+  ~ESP32_RMT_Driver() {}
 
   /*
    * Initialize the RMT Tx channel

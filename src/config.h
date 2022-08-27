@@ -27,7 +27,7 @@
 
 // Global settings
 #define NUMLEDS                           37  // Number of LEDs on the strip (if not set via build flags)
-#define DATAPIN                           25  // GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
+#define DATAPIN                           32  // GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define DISABLECERTCHECK 1					        // Uncomment to disable https certificate checks (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				      // User builtin LED for status (if not set via build flags)
 #define DEFAULT_POLLING_PRESENCE_INTERVAL "30"             // Default interval to poll for presence info (seconds)
