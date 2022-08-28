@@ -23,41 +23,47 @@
 #include <FS.h>
 #include <SPIFFS.h>
 
-// library's on GitHub
 #include <IotWebConf.h>
 #include <ArduinoJson.h>
 
-/**
- * Calculate token lifetime
- */
-int getTokenLifetime(void);
-
-/**
- * Remove context information file in SPIFFS
- */
-void removeContext(void);
-
-/**
- * API request handler
- */
+// public
+/// API request handler
 bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload = "", String type = "POST", bool sendAuth = false);
 
-/**
- * Handle web requests
- */
+/// Calculate token lifetime
+int getTokenLifetime(void);
 
-// Requests to
+/// Remove context information file in SPIFFS
+void removeContext(void);
+
+/// Requests to /startDevicelogin
+void handleStartDevicelogin(void);
+
+// private
+/// Handle web requests
+bool exists(String path);
+
+/// Config was saved
+void onConfigSaved(void);
+
+bool formValidator(void);
+
+String getContentType(String filename);
+
+/// Requests to
 void handleRoot(void);
 
 void handleGetSettings(void);
 
-// Delete EEPROM by removing the trailing sequence, remove context file
+/// Delete EEPROM by removing the trailing sequence, remove context file
 void handleClearSettings(void);
 
-bool formValidator(void);
+void handleMinimalUpload(void);
 
-// Config was saved
-void onConfigSaved(void);
+void handleFileUpload(void);
 
-// Requests to /startDevicelogin
-void handleStartDevicelogin(void);
+void handleFileDelete(void);
+
+void handleFileList(void);
+
+bool handleFileRead(String path);

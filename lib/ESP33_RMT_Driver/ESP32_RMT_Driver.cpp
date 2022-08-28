@@ -63,7 +63,7 @@ extern "C" void IRAM_ATTR u8_to_rmt(const void* src, rmt_item32_t* dest, size_t 
   *item_num        = num;
 }
 
-void ESP32_RMT_Driver::rmt_tx_int(rmt_channel_t channel, uint8_t gpio) {
+void ESP32_RMT_Driver::begin(rmt_channel_t channel, uint8_t gpio) {
   log_i("%d, %d, %d, %d, %d, %d, %d", APB_CLK_MHZ, RMT_CLK_DIV, RMT_TICK, T1_TICKS, T2_TICKS, T3_TICKS, RESET_TICKS);
 
   rmt_config_t config;

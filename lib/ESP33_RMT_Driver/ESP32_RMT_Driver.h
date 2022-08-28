@@ -25,5 +25,5 @@ public:
   /*
    * Initialize the RMT Tx channel
    */
-  void rmt_tx_int(rmt_channel_t channel, uint8_t gpio);
+  void begin(rmt_channel_t channel, uint8_t gpio);
 };
