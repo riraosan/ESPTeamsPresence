@@ -13,7 +13,7 @@
  */
 
 #include <Arduino.h>
-#include <M5Station.h>
+//#include <M5Station.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
@@ -25,9 +25,12 @@
 #include <ArduinoJson.h>
 #include <WS2812FX.h>
 
-#include "config.h"
-#include "filter.h"
-#include "esp32-hal-log.h"
+#include <ESP32_RMT_Driver.h>
+#include <Request.h>
+#include <config.h>
+#include <filter.h>
+
+#include <esp32-hal-log.h>
 
 #define STRING_LEN  64
 #define INTEGER_LEN 16
@@ -42,7 +45,8 @@ IotWebConfParameter paramClientId     = IotWebConfParameter("Client-ID (Generic 
 IotWebConfParameter paramTenant       = IotWebConfParameter("Tenant hostname / ID", "tenantId", paramTenantValue, STRING_LEN, "text", "e.g. contoso.onmicrosoft.com");
 IotWebConfParameter paramPollInterval = IotWebConfParameter("Presence polling interval (sec) (default: 30)", "pollInterval", paramPollIntervalValue, INTEGER_LEN, "number", "10..300", DEFAULT_POLLING_PRESENCE_INTERVAL, "min='10' max='300' step='5'");
 IotWebConfParameter paramNumLeds      = IotWebConfParameter("Number of LEDs (default: 16)", "numLeds", paramNumLedsValue, INTEGER_LEN, "number", "1..500", "16", "min='1' max='500' step='1'");
-byte                lastIotWebConfState;
+
+byte lastIotWebConfState;
 
 // IotWebConf
 // -- Initial name of the Thing. Used e.g. as SSID of the own Access Point.
@@ -54,16 +58,9 @@ DNSServer  dnsServer;
 WebServer  server(80);
 IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
 
-// HTTPS client
-// WiFiClientSecure client;
-
 String access_token  = "";
 String refresh_token = "";
 String id_token      = "";
-
-#include <ESP32_RMT_Driver.h>
-#include "request_handler.h"
-#include "spiffs_webserver.h"
 
 String availability = "";
 String activity     = "";
@@ -510,36 +507,36 @@ void customShow(void) {
  */
 void setup() {
   // WiFi不具合対策
-  pinMode(0, OUTPUT);
-  digitalWrite(0, LOW);
+  // pinMode(0, OUTPUT);
+  // digitalWrite(0, LOW);
 
-  M5.begin(true, false, true);
-  M5.Lcd.setCursor(0, 10);
-  M5.Lcd.setTextSize(3);
-  M5.Lcd.fillScreen(TFT_WHITE);
-  delay(1000);
-  M5.Lcd.fillScreen(TFT_BLACK);
-  M5.Lcd.setTextColor(TFT_WHITE);
+  // M5.begin(true, false, false);
 
-  M5.Lcd.print("Hello World. G0 is LOW.");
+  // M5.Lcd.setCursor(0, 10);
+  // M5.Lcd.setTextSize(3);
+  // M5.Lcd.fillScreen(TFT_WHITE);
+  // delay(1000);
+  // M5.Lcd.fillScreen(TFT_BLACK);
+  // M5.Lcd.setTextColor(TFT_WHITE);
+
+  // M5.Lcd.print("Hello World. G0 is LOW.");
 
   deserializeJson(loginFilter, _loginFilter);
-  // deserializeJson(tokenFilter, _tokenFilter);
   deserializeJson(refleshtokenFilter, _refleshtokenFilter);
   deserializeJson(presenceFilter, _presenceFilter);
 
   Serial.begin(115200);
   log_d("setup() Starting up...");
+  refactoring
 // Serial.setDebugOutput(true);
 #ifdef DISABLECERTCHECK
-  log_d("WARNING: Checking of HTTPS certificates disabled.");
+      log_d("WARNING: Checking of HTTPS certificates disabled.");
 #endif
 
   // WS2812FX
   ws2812fx.init();
-  // rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
 
-  blinker.rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
+  blinker.begin(RMT_CHANNEL_0, ws2812fx.getPin());
 
   ws2812fx.start();
   setAnimation(0, FX_MODE_STATIC, WHITE);
