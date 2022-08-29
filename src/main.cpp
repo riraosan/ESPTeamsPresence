@@ -527,10 +527,10 @@ void setup() {
 
   Serial.begin(115200);
   log_d("setup() Starting up...");
-  refactoring
+
 // Serial.setDebugOutput(true);
 #ifdef DISABLECERTCHECK
-      log_d("WARNING: Checking of HTTPS certificates disabled.");
+  log_d("WARNING: Checking of HTTPS certificates disabled.");
 #endif
 
   // WS2812FX
