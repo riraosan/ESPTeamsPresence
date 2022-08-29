@@ -67,3 +67,20 @@ void handleFileDelete(void);
 void handleFileList(void);
 
 bool handleFileRead(String path);
+
+void pollForToken(void);
+
+bool refreshToken(void);
+
+void statemachine(void);
+
+bool loadContext(void);
+
+void saveContext(void);
+
+// user method
+void pollPresence(void);
+
+void setAnimation(uint8_t segment, uint8_t mode = 0, uint32_t color = 0, uint16_t speed = 3000, bool reverse = false);
+
+void setPresenceAnimation(void);
