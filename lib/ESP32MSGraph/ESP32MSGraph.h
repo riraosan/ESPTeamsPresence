@@ -10,6 +10,7 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  *
  * refactored by @riraosan.github.io
+ * If I have seen further it is by standing on the shoulders of giants.
  */
 
 #include <Arduino.h>
@@ -111,7 +112,7 @@ protected:
   bool   exists(String path);
 
   // preference
-  void onConfigSaved(void);
+  //void onConfigSaved(void);
   bool loadContext(void);
   void saveContext(void);
   void removeContext(void);

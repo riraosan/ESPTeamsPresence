@@ -85,6 +85,24 @@ void onConfigSaved() {
   graph.setNumLedsValue(String(atoi(_paramNumLedsValue)));
 }
 
+void initAPI(void) {
+  // HTTP server - Set up required URL handlers on the web server.
+  server.on("/", HTTP_GET, [] { graph.handleRoot(); });
+  server.on("/config", HTTP_GET, [] { iotWebConf.handleConfig(); });
+  server.on("/config", HTTP_POST, [] { iotWebConf.handleConfig(); });
+  server.on("/upload", HTTP_GET, [] { graph.handleMinimalUpload(); });
+  server.on("/api/startDevicelogin", HTTP_GET, [] { graph.startDevicelogin(); });
+  server.on("/api/settings", HTTP_GET, [] { graph.handleGetSettings(); });
+  server.on("/api/clearSettings", HTTP_GET, [] { graph.handleClearSettings(); });
+
+  server.onNotFound([]() {
+    iotWebConf.handleNotFound();
+    // if (!handleFileRead(server.uri())) {
+    //   server.send(404, "text/plain", "FileNotFound");
+    // }
+  });
+}
+
 // TODO　どのようなWiFiクライアントを使ってもよい、とする。
 // WebUI - Initializing the configuration.
 void initWebUI(void) {
@@ -113,21 +131,9 @@ void initWebUI(void) {
   iotWebConf.skipApStartup();
   iotWebConf.init();
 
-  // HTTP server - Set up required URL handlers on the web server.
-  server.on("/", HTTP_GET, [] { graph.handleRoot(); });
-  server.on("/config", HTTP_GET, [] { iotWebConf.handleConfig(); });
-  server.on("/config", HTTP_POST, [] { iotWebConf.handleConfig(); });
-  server.on("/upload", HTTP_GET, [] { graph.handleMinimalUpload(); });
-  server.on("/api/startDevicelogin", HTTP_GET, [] { graph.startDevicelogin(); });
-  server.on("/api/settings", HTTP_GET, [] { graph.handleGetSettings(); });
-  server.on("/api/clearSettings", HTTP_GET, [] { graph.handleClearSettings(); });
+  onConfigSaved();
 
-  server.onNotFound([]() {
-    iotWebConf.handleNotFound();
-    // if (!handleFileRead(server.uri())) {
-    //   server.send(404, "text/plain", "FileNotFound");
-    // }
-  });
+  initAPI();
 }
 
 void customShow(void) {

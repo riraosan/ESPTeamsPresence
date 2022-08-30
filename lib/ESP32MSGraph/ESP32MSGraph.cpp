@@ -9,7 +9,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  *
- * modified by @riraosan.github.io
+ * refactored by @riraosan.github.io
+ * If I have seen further it is by standing on the shoulders of giants.
  */
 
 #include <memory>
@@ -816,7 +817,7 @@ void ESP32MSGraph::saveContext(void) {
   size_t bytesWritten = serializeJsonPretty(contextDoc, contextFile);
   contextFile.close();
   log_d("saveContext() - Success: %d", bytesWritten);
-  log_d("%s", contextDoc.as<String>().c_str());
+  // log_d("%s", contextDoc.as<String>().c_str());
 }
 
 // Get presence information
