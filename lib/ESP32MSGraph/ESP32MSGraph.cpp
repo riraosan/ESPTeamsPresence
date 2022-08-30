@@ -20,62 +20,90 @@
 #include <EEPROM.h>
 #include <FS.h>
 #include <SPIFFS.h>
+
 #include <IotWebConf.h>
 #include <ArduinoJson.h>
 #include <WS2812FX.h>
 #include <esp32-hal-log.h>
 
-#include <secrets.h>
 #include <config.h>
 #include <filter.h>
-#include <Request.h>
+#include <ESP32MSGraph.h>
 
-extern DNSServer        dnsServer;
-extern WebServer        server;
-extern IotWebConf       iotWebConf;
-extern HTTPUpdateServer httpUpdater;
-
-String  user_code   = "";
-String  device_code = "";
-uint8_t interval    = 5;
-
-extern unsigned int expires;
-extern char         paramClientIdValue[];
-extern char         paramTenantValue[];
-extern char         paramPollIntervalValue[];
-extern char         paramNumLedsValue[];
-
-extern IotWebConfParameter paramClientId;
-extern IotWebConfParameter paramTenant;
-extern IotWebConfParameter paramPollInterval;
-extern IotWebConfParameter paramNumLeds;
-
-extern String access_token;
-extern String refresh_token;
-extern String id_token;
-
-extern uint8_t       state;
-extern uint8_t       laststate;
-extern unsigned long tsPolling;
+extern IotWebConfParameter _paramClientId;
+extern IotWebConfParameter _paramTenant;
+extern IotWebConfParameter _paramPollInterval;
+extern IotWebConfParameter _paramNumLeds;
 
 extern WS2812FX ws2812fx;
-extern int      numberLeds;
+// extern int      numberLeds;
 
-extern StaticJsonDocument<200> loginFilter;         //初回ログインに使用
-extern StaticJsonDocument<200> tokenFilter;         //トークン取得に使用
-extern StaticJsonDocument<200> refleshtokenFilter;  //トークン再取得に使用
-extern StaticJsonDocument<200> presenceFilter;      //在籍情報取得時に使用
+#ifndef DISABLECERTCHECK
 
-String  availability = "";
-String  activity     = "";
-uint8_t retries      = 0;
-byte    lastIotWebConfState;
+// Tool to get certs: https://projects.petrucci.ch/esp32/
 
-int getTokenLifetime() {
-  return (expires - millis()) / 1000;
+// certificate for https://login.microsoftonline.com
+// DigiCert Global Root CA, Valid until: 10/Nov/2031
+// From: https://www.digicert.com/kb/digicert-root-certificates.htm
+constexpr char rootCACertificateLogin[] = R"(
+-----BEGIN CERTIFICATE-----
+MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBD
+QTAeFw0wNjExMTAwMDAwMDBaFw0zMTExMTAwMDAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IENBMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4jvhEXLeqKTTo1eqUKKPC3eQyaKl7hLOllsB
+CSDMAZOnTjC3U/dDxGkAV53ijSLdhwZAAIEJzs4bg7/fzTtxRuLWZscFs3YnFo97
+nh6Vfe63SKMI2tavegw5BmV/Sl0fvBf4q77uKNd0f3p4mVmFaG5cIzJLv07A6Fpt
+43C/dxC//AH2hdmoRBBYMql1GNXRor5H4idq9Joz+EkIYIvUX7Q6hL+hqkpMfT7P
+T19sdl6gSzeRntwi5m3OFBqOasv+zbMUZBfHWymeMr/y7vrTC0LUq7dBMtoM1O/4
+gdW7jVg/tRvoSSiicNoxBN33shbyTApOB6jtSj1etX+jkMOvJwIDAQABo2MwYTAO
+BgNVHQ8BAf8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUA95QNVbR
+TLtm8KPiGxvDl7I90VUwHwYDVR0jBBgwFoAUA95QNVbRTLtm8KPiGxvDl7I90VUw
+DQYJKoZIhvcNAQEFBQADggEBAMucN6pIExIK+t1EnE9SsPTfrgT1eXkIoyQY/Esr
+hMAtudXH/vTBH1jLuG2cenTnmCmrEbXjcKChzUyImZOMkXDiqw8cvpOp/2PV5Adg
+06O/nVsJ8dWO41P0jmP6P6fbtGbfYmbW0W5BjfIttep3Sp+dWOIrWcBAI+0tKIJF
+PnlUkiaY4IBIqDfv8NZ5YBberOgOzW6sRBc4L0na4UU+Krk2U886UAb3LujEV0ls
+YSEY1QSteDwsOoBrp+uvFRTp2InBuThs4pFsiv9kuXclVzDAGySj4dzp30d8tbQk
+CAUw7C29C79Fv1C5qfPrmAESrciIxpg0X40KPMbp1ZWVbd4=
+-----END CERTIFICATE-----
+)";
+
+// certificate for https://graph.microsoft.com
+// DigiCert Assured ID Root G2, Valid until: 15/Jan/2038
+// From: https://www.digicert.com/kb/digicert-root-certificates.htm
+constexpr char rootCACertificateGraph[] = R"(
+-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
+MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI
+2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx
+1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ
+q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz
+tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ
+vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP
+BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV
+5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY
+1Yl9PMWLSn/pvtsrF9+wX3N3KjITOYFnQoQj8kVnNeyIv/iPsGEMNKSuIEyExtv4
+NeF22d+mQrvHRAiGfzZ0JFrabA0UWTW98kndth/Jsw1HKj2ZL7tcu7XUIOGZX1NG
+Fdtom/DzMNU+MeKNhJ7jitralj41E6Vf8PlwUHBHQRFXGU7Aj64GxJUTFy8bJZ91
+8rGOmaFvE7FBcf6IKshPECBV1/MUReXgRPTqh5Uykw7+U0b6LJ3/iyK5S9kJRaTe
+pLiaWN0bfVKfjllDiIGknibVb63dDcY3fe0Dkhvld1927jyNxF1WW6LZZm6zNTfl
+MrY=
+-----END CERTIFICATE-----
+)";
+#endif
+
+int ESP32MSGraph::getTokenLifetime() {
+  return (_expires - millis()) / 1000;
 }
 
-void removeContext() {
+void ESP32MSGraph::removeContext() {
   SPIFFS.remove(CONTEXT_FILE);
   log_d("removeContext() - Success");
 }
@@ -83,7 +111,7 @@ void removeContext() {
 /**
  * API request handler
  */
-bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload, String type, bool sendAuth) {
+bool ESP32MSGraph::requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, String url, String payload, String type, bool sendAuth) {
   std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
 
 #ifndef DISABLECERTCHECK
@@ -156,26 +184,19 @@ bool requestJsonApi(JsonDocument& doc, ARDUINOJSON_NAMESPACE::Filter filter, Str
   return false;
 }
 
-/**
- * Handle web requests
- */
-
-// Requests to /
-void handleRoot() {
+void ESP32MSGraph::handleRoot() {
   log_d("handleRoot()");
   // -- Let IotWebConf test and handle captive portal requests.
-  if (iotWebConf.handleCaptivePortal()) {
+  if (_iotWebConf->handleCaptivePortal()) {
     return;
   }
-
-  // <link href = "https://fonts.googleapis.com/css?family=Press+Start+2P" rel = "stylesheet">
-  //     <link href = "https://unpkg.com/nes.css@2.3.0/css/nes.min.css" rel = "stylesheet" />
 
   String response = R"(
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+<link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
 <link href="https://unpkg.com/nes.css@2.3.0/css/nes.min.css" rel="stylesheet" />
 <style type="text/css">
   body {padding:3.5rem}
@@ -267,7 +288,7 @@ Go to <a href="config">configuration page</a> to change settings.
 </html>
 )";
 
-  if (strlen(paramTenantValue) == 0 || strlen(paramClientIdValue) == 0) {
+  if (_paramTenantValue.isEmpty() || _paramClientIdValue.isEmpty()) {
     response.replace("__MESSAGE__", R"(<p class="note nes-text is-error">Some settings are missing. Go to <a href="config">configuration page</a> to complete setup.</p></div>)");
     response.replace("__BUTTON__", "");
   } else {
@@ -280,10 +301,10 @@ Go to <a href="config">configuration page</a> to change settings.
     response.replace("__BUTTON__", R"(<div><button type="button" class="nes-btn" onclick="openDeviceLoginModal();" >Start device login</button></div>)");
   }
 
-  response.replace("__CLIENTID__", String(paramClientIdValue));
-  response.replace("__TENANTVALUE__", String(paramTenantValue));
-  response.replace("__POLLVALUE__", String(paramPollIntervalValue));
-  response.replace("__LEDSVALUE__", String(paramNumLedsValue));
+  response.replace("__CLIENTID__", _paramClientIdValue);
+  response.replace("__TENANTVALUE__", _paramTenantValue);
+  response.replace("__POLLVALUE__", _paramPollIntervalValue);
+  response.replace("__LEDSVALUE__", _paramNumLedsValue);
 
   response.replace("__VERSION__", VERSION);
   response.replace("__SKETCHSIZE__", String(ESP.getSketchSize()));
@@ -291,18 +312,19 @@ Go to <a href="config">configuration page</a> to change settings.
   response.replace("__FREEHEAP__", String(ESP.getFreeHeap()));
   response.replace("__USEDHEAP__", String(327680 - ESP.getFreeHeap()));
 
-  server.send(200, "text/html", response);
+  _server->send(200, "text/html", response);
 }
 
-void handleGetSettings() {
+void ESP32MSGraph::handleGetSettings() {
   log_d("handleGetSettings()");
 
-  const int                    capacity = JSON_OBJECT_SIZE(13);
+  const int capacity = JSON_OBJECT_SIZE(13);
+
   StaticJsonDocument<capacity> responseDoc;
-  responseDoc["client_id"].set(paramClientIdValue);
-  responseDoc["tenant"].set(paramTenantValue);
-  responseDoc["poll_interval"].set(paramPollIntervalValue);
-  responseDoc["num_leds"].set(paramNumLedsValue);
+  responseDoc["client_id"].set(_paramClientIdValue);
+  responseDoc["tenant"].set(_paramTenantValue);
+  responseDoc["poll_interval"].set(_paramPollIntervalValue);
+  responseDoc["num_leds"].set(_paramNumLedsValue);
 
   responseDoc["heap"].set(ESP.getFreeHeap());
   responseDoc["min_heap"].set(ESP.getMinFreeHeap());
@@ -315,11 +337,13 @@ void handleGetSettings() {
 
   responseDoc["sketch_version"].set(VERSION);
 
-  server.send(200, "application/json", responseDoc.as<String>());
+  serializeJsonPretty(responseDoc, Serial);
+
+  _server->send(200, "application/json", responseDoc.as<String>());
 }
 
 // Delete EEPROM by removing the trailing sequence, remove context file
-void handleClearSettings() {
+void ESP32MSGraph::handleClearSettings() {
   log_d("handleClearSettings()");
 
   for (int t = 0; t < 4; t++) {
@@ -328,54 +352,22 @@ void handleClearSettings() {
   EEPROM.commit();
   removeContext();
 
-  server.send(200, "application/json", "{\"action\": \"clear_settings\", \"error\": false}");
+  _server->send(200, "application/json", "{\"action\": \"clear_settings\", \"error\": false}");
   ESP.restart();
 }
 
-bool formValidator() {
-  log_d("Validating form.");
-  boolean valid = true;
-
-  int l1 = server.arg(paramClientId.getId()).length();
-  if (l1 < 36) {
-    paramClientId.errorMessage = "Please provide at least 36 characters for the client id!";
-    valid                      = false;
-  }
-
-  int l2 = server.arg(paramTenant.getId()).length();
-  if (l2 < 10) {
-    paramTenant.errorMessage = "Please provide at least 10 characters for the tenant host / GUID!";
-    valid                    = false;
-  }
-
-  int l3 = server.arg(paramPollInterval.getId()).length();
-  if (l3 < 1) {
-    paramPollInterval.errorMessage = "Please provide a value for the presence poll interval!";
-    valid                          = false;
-  }
-
-  int l4 = server.arg(paramNumLeds.getId()).length();
-  if (l4 < 1) {
-    paramNumLeds.errorMessage = "Please provide a value for the number of LEDs!";
-    valid                     = false;
-  }
-
-  return valid;
-}
-
-// Requests to /startDevicelogin
-void handleStartDevicelogin() {
+void ESP32MSGraph::startDevicelogin() {
   // Only if not already started
-  if (state != SMODEDEVICELOGINSTARTED) {
+  if (_state != SMODEDEVICELOGINSTARTED) {
     log_d("handleStartDevicelogin()");
 
-    // Request devicelogin context
+    // Request device login context
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(6) + 540);
 
     bool res = requestJsonApi(doc,
-                              DeserializationOption::Filter(loginFilter),
-                              "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/devicecode",
-                              "client_id=" + String(paramClientIdValue) + "&scope=offline_access%20openid%20Presence.Read");
+                              DeserializationOption::Filter(_loginFilter),
+                              "https://login.microsoftonline.com/" + _paramTenantValue + "/oauth2/v2.0/devicecode",
+                              "client_id=" + _paramClientIdValue + "&scope=offline_access%20openid%20Presence.Read");
 
     if (res && doc.containsKey("device_code") && doc.containsKey("user_code") && doc.containsKey("interval") && doc.containsKey("verification_uri") && doc.containsKey("message")) {
       // Save device_code, user_code and interval
@@ -390,23 +382,23 @@ void handleStartDevicelogin() {
       responseDoc["message"]          = doc["message"].as<const char*>();
 
       // Set state, update polling timestamp
-      state     = SMODEDEVICELOGINSTARTED;
-      tsPolling = millis() + (interval * 1000);
+      _state     = SMODEDEVICELOGINSTARTED;
+      _tsPolling = millis() + (interval * 1000);
 
       // Send JSON response
-      server.send(200, "application/json", responseDoc.as<String>());
+      _server->send(200, "application/json", responseDoc.as<String>());
     } else {
-      server.send(500, "application/json", "{\"error\": \"devicelogin_unknown_response\"}");
+      _server->send(500, "application/json", "{\"error\": \"devicelogin_unknown_response\"}");
     }
   } else {
-    server.send(409, "application/json", "{\"error\": \"devicelogin_already_running\"}");
+    _server->send(409, "application/json", "{\"error\": \"devicelogin_already_running\"}");
   }
 }
 
 /**
  * SPIFFS webserver
  */
-bool exists(String path) {
+bool ESP32MSGraph::exists(String path) {
   bool yes  = false;
   File file = SPIFFS.open(path, "r");
   if (!file.isDirectory()) {
@@ -416,9 +408,9 @@ bool exists(String path) {
   return yes;
 }
 
-void handleMinimalUpload() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.send(200, "text/html", "<!DOCTYPE html>\
+void ESP32MSGraph::handleMinimalUpload() {
+  _server->sendHeader("Access-Control-Allow-Origin", "*");
+  _server->send(200, "text/html", "<!DOCTYPE html>\
 			<html>\
 			<head>\
 				<title>ESP8266 Upload</title>\
@@ -436,9 +428,9 @@ void handleMinimalUpload() {
 			</html>");
 }
 
-void handleFileUpload() {
+void ESP32MSGraph::handleFileUpload() {
   File        fsUploadFile;
-  HTTPUpload& upload = server.upload();
+  HTTPUpload& upload = _server->upload();
   if (upload.status == UPLOAD_FILE_START) {
     String filename = upload.filename;
     if (!filename.startsWith("/")) {
@@ -460,30 +452,30 @@ void handleFileUpload() {
   }
 }
 
-void handleFileDelete() {
-  if (server.args() == 0) {
-    return server.send(500, "text/plain", "BAD ARGS");
+void ESP32MSGraph::handleFileDelete() {
+  if (_server->args() == 0) {
+    return _server->send(500, "text/plain", "BAD ARGS");
   }
-  String path = server.arg(0);
+  String path = _server->arg(0);
   log_d("handleFileDelete: %s", path);
   if (path == "/") {
-    return server.send(500, "text/plain", "BAD PATH");
+    return _server->send(500, "text/plain", "BAD PATH");
   }
   if (!exists(path)) {
-    return server.send(404, "text/plain", "FileNotFound");
+    return _server->send(404, "text/plain", "FileNotFound");
   }
   SPIFFS.remove(path);
-  server.send(200, "text/plain", "");
+  _server->send(200, "text/plain", "");
   path = String();
 }
 
-void handleFileList() {
-  if (!server.hasArg("dir")) {
-    server.send(500, "text/plain", "BAD ARGS");
+void ESP32MSGraph::handleFileList() {
+  if (!_server->hasArg("dir")) {
+    _server->send(500, "text/plain", "BAD ARGS");
     return;
   }
 
-  String path = server.arg("dir");
+  String path = _server->arg("dir");
   log_d("handleFileList: %s", path);
 
   File root     = SPIFFS.open(path);
@@ -504,11 +496,11 @@ void handleFileList() {
     }
   }
   output += "]";
-  server.send(200, "text/json", output);
+  _server->send(200, "text/json", output);
 }
 
-String getContentType(String filename) {
-  if (server.hasArg("download")) {
+String ESP32MSGraph::getContentType(String filename) {
+  if (_server->hasArg("download")) {
     return "application/octet-stream";
   } else if (filename.endsWith(".htm")) {
     return "text/html";
@@ -538,7 +530,7 @@ String getContentType(String filename) {
   return "text/plain";
 }
 
-bool handleFileRead(String path) {
+bool ESP32MSGraph::handleFileRead(String path) {
   log_d("handleFileRead: %s", path);
   if (path.endsWith("/")) {
     path += "index.htm";
@@ -550,7 +542,7 @@ bool handleFileRead(String path) {
       path += ".gz";
     }
     File file = SPIFFS.open(path, "r");
-    server.streamFile(file, contentType);
+    _server->streamFile(file, contentType);
     file.close();
     return true;
   }
@@ -558,18 +550,18 @@ bool handleFileRead(String path) {
 }
 
 // Poll for access token
-void pollForToken() {
-  String payload = "client_id=" + String(paramClientIdValue) + "&grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=" + device_code;
+void ESP32MSGraph::pollForToken(void) {
+  String payload = "client_id=" + String(_paramClientIdValue) + "&grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=" + device_code;
 
   DynamicJsonDocument responseDoc(JSON_OBJECT_SIZE(7) + 5000);
 
   bool res = requestJsonApi(responseDoc,
-                            DeserializationOption::Filter(refleshtokenFilter),
-                            "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token",
+                            DeserializationOption::Filter(_refleshtokenFilter),
+                            "https://login.microsoftonline.com/" + String(_paramTenantValue) + "/oauth2/v2.0/token",
                             payload);
 
   if (!res) {
-    state = SMODEDEVICELOGINFAILED;
+    _state = SMODEDEVICELOGINFAILED;
   } else if (responseDoc.containsKey("error")) {
     const char* _error             = responseDoc["error"];
     const char* _error_description = responseDoc["error_description"];
@@ -578,7 +570,7 @@ void pollForToken() {
       log_i("pollForToken() - Wating for authorization by user: %s", _error_description);
     } else {
       log_e("pollForToken() - Unexpected error: %s, %s", _error, _error_description);
-      state = SMODEDEVICELOGINFAILED;
+      _state = SMODEDEVICELOGINFAILED;
     }
   } else {
     if (responseDoc.containsKey("access_token") && responseDoc.containsKey("refresh_token") && responseDoc.containsKey("id_token")) {
@@ -587,10 +579,10 @@ void pollForToken() {
       access_token             = responseDoc["access_token"].as<String>();
       refresh_token            = responseDoc["refresh_token"].as<String>();
       id_token                 = responseDoc["id_token"].as<String>();
-      expires                  = millis() + (_expires_in * 1000);  // Calculate timestamp when token expires
+      _expires                 = millis() + (_expires_in * 1000);  // Calculate timestamp when token _expires
 
       // Set state
-      state = SMODEAUTHREADY;
+      _state = SMODEAUTHREADY;
 
       log_i("Set : SMODEAUTHREADY");
     } else {
@@ -600,17 +592,17 @@ void pollForToken() {
 }
 
 // Refresh the access token
-bool refreshToken() {
+bool ESP32MSGraph::refreshToken(void) {
   bool success = false;
   // See: https://docs.microsoft.com/de-de/azure/active-directory/develop/v1-protocols-oauth-code#refreshing-the-access-tokens
-  String payload = "client_id=" + String(paramClientIdValue) + "&grant_type=refresh_token&refresh_token=" + refresh_token;
+  String payload = "client_id=" + _paramClientIdValue + "&grant_type=refresh_token&refresh_token=" + refresh_token;
   log_d("refreshToken()");
 
   DynamicJsonDocument responseDoc(6144);  // from ArduinoJson Assistant
 
   bool res = requestJsonApi(responseDoc,
-                            DeserializationOption::Filter(refleshtokenFilter),
-                            "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token",
+                            DeserializationOption::Filter(_refleshtokenFilter),
+                            "https://login.microsoftonline.com/" + _paramTenantValue + "/oauth2/v2.0/token",
                             payload);
 
   // Replace tokens and expiration
@@ -628,15 +620,15 @@ bool refreshToken() {
     }
     if (!responseDoc["expires_in"].isNull()) {
       int _expires_in = responseDoc["expires_in"].as<unsigned int>();
-      expires         = millis() + (_expires_in * 1000);  // Calculate timestamp when token expires
+      _expires        = millis() + (_expires_in * 1000);  // Calculate timestamp when token _expires
     }
 
     log_d("refreshToken() - Success");
-    state = SMODEPOLLPRESENCE;
+    _state = SMODEPOLLPRESENCE;
   } else {
     log_d("refreshToken() - Error:");
     // Set retry after timeout
-    tsPolling = millis() + (DEFAULT_ERROR_RETRY_INTERVAL * 1000);
+    _tsPolling = millis() + (DEFAULT_ERROR_RETRY_INTERVAL * 1000);
   }
   return success;
 }
@@ -654,28 +646,28 @@ SMODEPOLLPRESENCE
 SMODEREFRESHTOKEN
 */
 // Implementation of a statemachine to handle the different application states
-void statemachine() {
+void ESP32MSGraph::statemachine(void) {
   // Statemachine: Check states of iotWebConf to detect AP mode and WiFi Connection attempt
-  byte iotWebConfState = iotWebConf.getState();
-  if (iotWebConfState != lastIotWebConfState) {
+  byte iotWebConfState = _iotWebConf->getState();
+  if (iotWebConfState != _lastIotWebConfState) {
     if (iotWebConfState == IOTWEBCONF_STATE_NOT_CONFIGURED || iotWebConfState == IOTWEBCONF_STATE_AP_MODE) {
       log_d("Detected AP mode");
       setAnimation(0, FX_MODE_THEATER_CHASE, WHITE);
     }
     if (iotWebConfState == IOTWEBCONF_STATE_CONNECTING) {
       log_d("WiFi connecting");
-      state = SMODEWIFICONNECTING;
+      _state = SMODEWIFICONNECTING;
     }
   }
-  lastIotWebConfState = iotWebConfState;
+  _lastIotWebConfState = iotWebConfState;
 
   // Statemachine: Wifi connection start
-  if (state == SMODEWIFICONNECTING && laststate != SMODEWIFICONNECTING) {
+  if (_state == SMODEWIFICONNECTING && _laststate != SMODEWIFICONNECTING) {
     setAnimation(0, FX_MODE_THEATER_CHASE, BLUE);
   }
 
   // Statemachine: After wifi is connected
-  if (state == SMODEWIFICONNECTED && laststate != SMODEWIFICONNECTED) {
+  if (_state == SMODEWIFICONNECTED && _laststate != SMODEWIFICONNECTED) {
     setAnimation(0, FX_MODE_THEATER_CHASE, GREEN);
     // startMDNS();
     loadContext();
@@ -684,53 +676,53 @@ void statemachine() {
   }
 
   // Statemachine: Devicelogin started
-  if (state == SMODEDEVICELOGINSTARTED) {
+  if (_state == SMODEDEVICELOGINSTARTED) {
     // log_d("SMODEDEVICELOGINSTARTED");
-    if (laststate != SMODEDEVICELOGINSTARTED) {
+    if (_laststate != SMODEDEVICELOGINSTARTED) {
       setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
       log_d("Device login failed");
     }
-    if (millis() >= tsPolling) {
+    if (millis() >= _tsPolling) {
       pollForToken();
-      tsPolling = millis() + (interval * 1000);
+      _tsPolling = millis() + (interval * 1000);
       log_d("pollForToken");
     }
   }
 
   // Statemachine: Devicelogin failed
-  if (state == SMODEDEVICELOGINFAILED) {
+  if (_state == SMODEDEVICELOGINFAILED) {
     log_d("Device login failed");
-    state = SMODEWIFICONNECTED;  // Return back to initial mode
+    _state = SMODEWIFICONNECTED;  // Return back to initial mode
   }
 
   // Statemachine: Auth is ready, start polling for presence immediately
-  if (state == SMODEAUTHREADY) {
+  if (_state == SMODEAUTHREADY) {
     saveContext();
-    state     = SMODEPOLLPRESENCE;
-    tsPolling = millis();
+    _state     = SMODEPOLLPRESENCE;
+    _tsPolling = millis();
   }
 
   // Statemachine: Poll for presence information, even if there was a error before (handled below)
-  if (state == SMODEPOLLPRESENCE) {
-    if (millis() >= tsPolling) {
+  if (_state == SMODEPOLLPRESENCE) {
+    if (millis() >= _tsPolling) {
       log_i("%s", "Polling presence info ...");
       pollPresence();
-      tsPolling = millis() + (atoi(paramPollIntervalValue) * 1000);
+      _tsPolling = millis() + (atoi(_paramPollIntervalValue.c_str()) * 1000);
       log_i("--> Availability: %s, Activity: %s", availability.c_str(), activity.c_str());
     }
 
     if (getTokenLifetime() < TOKEN_REFRESH_TIMEOUT) {
       log_w("Token needs refresh, valid for %d s.", getTokenLifetime());
-      state = SMODEREFRESHTOKEN;
+      _state = SMODEREFRESHTOKEN;
     }
   }
 
   // Statemachine: Refresh token
-  if (state == SMODEREFRESHTOKEN) {
-    if (laststate != SMODEREFRESHTOKEN) {
+  if (_state == SMODEREFRESHTOKEN) {
+    if (_laststate != SMODEREFRESHTOKEN) {
       setAnimation(0, FX_MODE_THEATER_CHASE, RED);
     }
-    if (millis() >= tsPolling) {
+    if (millis() >= _tsPolling) {
       boolean success = refreshToken();
       if (success) {
         saveContext();
@@ -739,28 +731,28 @@ void statemachine() {
   }
 
   // Statemachine: Polling presence failed
-  if (state == SMODEPRESENCEREQUESTERROR) {
-    if (laststate != SMODEPRESENCEREQUESTERROR) {
-      retries = 0;
+  if (_state == SMODEPRESENCEREQUESTERROR) {
+    if (_laststate != SMODEPRESENCEREQUESTERROR) {
+      _retries = 0;
     }
 
-    log_e("Polling presence failed, retry #%d.", retries);
-    if (retries >= 5) {
+    log_e("Polling presence failed, retry #%d.", _retries);
+    if (_retries >= 5) {
       // Try token refresh
-      state = SMODEREFRESHTOKEN;
+      _state = SMODEREFRESHTOKEN;
     } else {
-      state = SMODEPOLLPRESENCE;
+      _state = SMODEPOLLPRESENCE;
     }
   }
 
   // Update laststate
-  if (laststate != state) {
-    laststate = state;
+  if (_laststate != _state) {
+    _laststate = _state;
     log_d("======================================================================");
   }
 }
 
-bool loadContext(void) {
+bool ESP32MSGraph::loadContext(void) {
   File    file    = SPIFFS.open(CONTEXT_FILE);
   boolean success = false;
 
@@ -794,9 +786,9 @@ bool loadContext(void) {
         if (numSettings == 3) {
           success = true;
           log_d("loadContext() - Success");
-          if (strlen(paramClientIdValue) > 0 && strlen(paramTenantValue) > 0) {
+          if (_paramClientIdValue.length() > 0 && _paramTenantValue.length() > 0) {
             log_d("loadContext() - Next: Refresh token.");
-            state = SMODEREFRESHTOKEN;
+            _state = SMODEREFRESHTOKEN;
           } else {
             log_d("loadContext() - No client id or tenant setting found.");
           }
@@ -813,7 +805,7 @@ bool loadContext(void) {
 }
 
 // Save context information to file in SPIFFS
-void saveContext() {
+void ESP32MSGraph::saveContext(void) {
   const size_t        capacity = JSON_OBJECT_SIZE(3) + 5000;
   DynamicJsonDocument contextDoc(capacity);
   contextDoc["access_token"]  = access_token.c_str();
@@ -829,7 +821,7 @@ void saveContext() {
 
 // Get presence information
 // user method
-void pollPresence() {
+void ESP32MSGraph::pollPresence(void) {
   log_d("pollPresence()");
   // See: https://github.com/microsoftgraph/microsoft-graph-docs/blob/ananya/api-reference/beta/resources/presence.md
   const size_t        capacity = JSON_OBJECT_SIZE(4) + 500;
@@ -837,26 +829,26 @@ void pollPresence() {
 
   // TODO
   bool res = requestJsonApi(responseDoc,
-                            DeserializationOption::Filter(presenceFilter),
+                            DeserializationOption::Filter(_presenceFilter),
                             "https://graph.microsoft.com/v1.0/me/presence",
                             "",
                             "GET",
                             true);
 
   if (!res) {
-    state = SMODEPRESENCEREQUESTERROR;
-    retries++;
-    log_e("Presence request error. retry:#%d", retries);
+    _state = SMODEPRESENCEREQUESTERROR;
+    _retries++;
+    log_e("Presence request error. retry:#%d", _retries);
   } else if (responseDoc.containsKey("error")) {
     const char* _error_code = responseDoc["error"]["code"];
     if (strcmp(_error_code, "InvalidAuthenticationToken")) {
       log_e("pollPresence() - Refresh needed");
-      tsPolling = millis();
-      state     = SMODEREFRESHTOKEN;
+      _tsPolling = millis();
+      _state     = SMODEREFRESHTOKEN;
     } else {
       log_e("pollPresence() - Error: %s\n", _error_code);
-      state = SMODEPRESENCEREQUESTERROR;
-      retries++;
+      _state = SMODEPRESENCEREQUESTERROR;
+      _retries++;
     }
   } else {
     log_i("success to get Presence");
@@ -864,7 +856,7 @@ void pollPresence() {
     // Store presence info
     availability = responseDoc["availability"].as<String>();
     activity     = responseDoc["activity"].as<String>();
-    retries      = 0;
+    _retries     = 0;
 
     setPresenceAnimation();
   }
@@ -872,13 +864,14 @@ void pollPresence() {
 
 // Neopixel control
 // user method
-void setAnimation(uint8_t segment, uint8_t mode, uint32_t color, uint16_t speed, bool reverse) {
+void ESP32MSGraph::setAnimation(uint8_t segment, uint8_t mode, uint32_t color, uint16_t speed, bool reverse) {
   uint16_t startLed, endLed = 0;
 
   // Support only one segment for the moment
   if (segment == 0) {
     startLed = 0;
-    endLed   = numberLeds;
+    // endLed   = numberLeds;
+    endLed = ws2812fx.getLength();
   }
 
   log_i("setAnimation: %d, %d-%d, Mode: %d, Color: %d, Speed: %d", segment, startLed, endLed, mode, color, speed);
@@ -903,7 +896,7 @@ void setAnimation(uint8_t segment, uint8_t mode, uint32_t color, uint16_t speed,
 //  PresenceUnknown,
 //  Presenting,
 //  UrgentInterruptionsOnly
-void setPresenceAnimation() {
+void ESP32MSGraph::setPresenceAnimation() {
   if (activity.equals("Available")) {
     setAnimation(0, FX_MODE_STATIC, GREEN);
   }
